@@ -27,13 +27,13 @@ PNG를 `Assets/Art/Characters/Cat/Sprites/` 아래에 폴더째 넣고, 전부 �
 | 항목 | 값 |
 | --- | --- |
 | Texture Type | Sprite (2D and UI) |
-| Sprite Mode | Single (개별 PNG) / Multiple (sheet 사용 시) |
-| Pixels Per Unit | 128 |
-| Pivot | Bottom Center (sheet는 Sprite Editor에서 지정) |
+| Sprite Mode | Multiple (프로젝트 기본값 그대로) |
+| Pixels Per Unit | 100 |
+| Pivot | Center (기본값, 충돌 범위를 이 기준으로 맞춤) |
 | Filter Mode | Point (no filter) |
 | Compression | None |
 
-Pixels Per Unit 128이면 걷는 고양이가 약 1 x 0.7 유닛이라, 지금 프로토타입의 네모 고양이(1 x 0.6)와 거의 같은 크기예요.
+모든 고양이 그림은 **반드시 같은 Pixels Per Unit(100)** 을 써야 해요. 값이 다르면 그림이 바뀔 때 고양이 크기가 달라져요.
 
 sheet를 쓸 때는 Sprite Editor → Slice → **Grid By Cell Size**에 위 표의 셀 크기를 넣으면 프레임별로 잘려요.
 
