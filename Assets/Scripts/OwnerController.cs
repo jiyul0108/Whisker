@@ -9,7 +9,8 @@ public class OwnerController : MonoBehaviour
     [SerializeField] private Transform[] waypoints;
     [SerializeField] private float moveSpeed = 2f;
 
-    [Header("상태별 색 (프로토타입 확인용)")]
+    [Header("상태별 색 (프로토타입 확인용, 끄면 원래 그림 색)")]
+    [SerializeField] private bool useStateColors = false;
     [SerializeField] private Color waitingColor = new Color(0.45f, 0.65f, 1f);
     [SerializeField] private Color movingColor = new Color(0.45f, 1f, 0.55f);
     [SerializeField] private Color arrivedColor = new Color(1f, 0.85f, 0.3f);
@@ -69,6 +70,11 @@ public class OwnerController : MonoBehaviour
     private void ApplyColor()
     {
         if (sr == null) return;
+        if (!useStateColors)
+        {
+            sr.color = Color.white;
+            return;
+        }
         sr.color = CurrentState switch
         {
             State.Moving => movingColor,
