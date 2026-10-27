@@ -21,10 +21,15 @@ public class CatController : MonoBehaviour
     private bool jumpPressed;
     private bool isGrounded;
 
+    // 애니메이션 스크립트가 읽는 값
+    public bool IsGrounded => isGrounded;
+    public float MoveInput => moveInput;
+    public float VelocityY => rb.linearVelocity.y;
+
     void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        sr = GetComponent<SpriteRenderer>();
+        sr = GetComponentInChildren<SpriteRenderer>(); // 자식 Visual의 그림
     }
 
     void Update()
@@ -38,7 +43,7 @@ public class CatController : MonoBehaviour
 
         if (kb.spaceKey.wasPressedThisFrame) jumpPressed = true;
 
-        // 이동 방향에 따라 좌우 반전 (나중에 고양이 스프라이트용)
+        // 이동 방향에 따라 좌우 반전
         if (moveInput != 0f && sr != null) sr.flipX = moveInput < 0f;
     }
 

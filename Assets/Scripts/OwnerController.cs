@@ -24,7 +24,7 @@ public class OwnerController : MonoBehaviour
     void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        sr = GetComponent<SpriteRenderer>();
+        sr = GetComponentInChildren<SpriteRenderer>(); // 자식 Visual의 그림
         ApplyColor();
     }
 

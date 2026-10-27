@@ -1,4 +1,3 @@
-using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -9,18 +8,12 @@ public class CatMeow : MonoBehaviour
     [SerializeField] private float callRadius = 4f;
     [SerializeField] private float cooldown = 0.5f;
 
-    [Header("울기 그림 (선택)")]
-    [SerializeField] private Sprite meowSprite;
-    [SerializeField] private float meowSpriteTime = 0.35f;
-
-    private SpriteRenderer sr;
-    private Sprite normalSprite;
+    private CatAnimator anim;
     private float lastMeowTime = -999f;
 
     void Awake()
     {
-        sr = GetComponent<SpriteRenderer>();
-        if (sr != null) normalSprite = sr.sprite;
+        anim = GetComponent<CatAnimator>();
     }
 
     void Update()
@@ -36,7 +29,8 @@ public class CatMeow : MonoBehaviour
     {
         lastMeowTime = Time.time;
 
-        if (meowSprite != null && sr != null) StartCoroutine(ShowMeowSprite());
+        // 울기 그림은 CatAnimator가 보여줌
+        if (anim != null) anim.PlayMeow();
 
         if (owner == null) return;
 
@@ -50,13 +44,6 @@ public class CatMeow : MonoBehaviour
         {
             Debug.Log($"야옹... 주인이 너무 멀다 (거리 {dist:F1})");
         }
-    }
-
-    private IEnumerator ShowMeowSprite()
-    {
-        sr.sprite = meowSprite;
-        yield return new WaitForSeconds(meowSpriteTime);
-        sr.sprite = normalSprite;
     }
 
     void OnDrawGizmosSelected()
