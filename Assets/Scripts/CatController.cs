@@ -25,6 +25,7 @@ public class CatController : MonoBehaviour
     public bool IsGrounded => isGrounded;
     public float MoveInput => moveInput;
     public float VelocityY => rb.linearVelocity.y;
+    public int Facing => (sr != null && sr.flipX) ? -1 : 1; // 1 = 오른쪽, -1 = 왼쪽
 
     void Awake()
     {
