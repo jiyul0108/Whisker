@@ -179,7 +179,12 @@ public class PresenceAI : MonoBehaviour
     {
         SetState(State.Caught);
         if (pounceSprite != null) sr.sprite = pounceSprite;
-        Debug.Log($"존재에게 {who}이(가) 잡혔다! (게임오버는 다음 작업에서 연결)");
+        alpha = 1f;          // 숨어 있다가 잡아도 모습이 보이게
+        SetAlpha(1f);
+        Debug.Log($"존재에게 {who}이(가) 잡혔다!");
+
+        if (GameManager.Instance != null) GameManager.Instance.GameOver($"{who}이(가) 잡힘");
+        else Debug.LogWarning("GameManager가 씬에 없어서 게임오버를 할 수 없어요");
     }
 
     private void SetState(State s)
