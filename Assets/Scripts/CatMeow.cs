@@ -20,6 +20,7 @@ public class CatMeow : MonoBehaviour
     {
         var kb = Keyboard.current;
         if (kb == null) return;
+        if (NoteUI.IsReading) return; // 쪽지 읽는 동안 울기 안 됨
 
         if (kb.eKey.wasPressedThisFrame && Time.time - lastMeowTime >= cooldown)
             Meow();

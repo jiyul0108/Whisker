@@ -36,9 +36,10 @@ public class CatController : MonoBehaviour
     void Update()
     {
         var kb = Keyboard.current;
-        if (kb == null) return;
-
         moveInput = 0f;
+        if (kb == null) return;
+        if (NoteUI.IsReading) { jumpPressed = false; return; } // 쪽지 읽는 동안 조작 안 됨
+
         if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) moveInput -= 1f;
         if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) moveInput += 1f;
 
