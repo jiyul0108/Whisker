@@ -4,7 +4,7 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody2D), typeof(BoxCollider2D))]
 public class PresenceAI : MonoBehaviour
 {
-    public enum State { Lurking, Noticing, Chasing, Pouncing, Returning, Caught }
+    public enum State { Lurking, Noticing, Chasing, Pouncing, Searching, Returning, Caught }
 
     [Header("대상")]
     [SerializeField] private CatController cat;
@@ -39,6 +39,7 @@ public class PresenceAI : MonoBehaviour
     [SerializeField] private float loseRange = 10f;
     [SerializeField] private float loseTime = 3f;      // 이 시간 동안 멀리 있으면 포기
     [SerializeField] private float returnSpeed = 1.5f;
+    [SerializeField] private float searchTime = 2.5f;  // 숨어버리면 이 시간 동안 두리번거리다 포기
 
     [Header("충돌 범위 (발밑 기준)")]
     [SerializeField] private Vector2 standSize = new Vector2(0.9f, 1.8f); // 서 있을 때 (대기·발견)
@@ -81,7 +82,9 @@ public class PresenceAI : MonoBehaviour
 
         // 1) 보이는지 판단해서 투명도 조절
         bool hunting = CurrentState == State.Noticing || CurrentState == State.Chasing
-                    || CurrentState == State.Pouncing || CurrentState == State.Caught;
+                    || CurrentState == State.Pouncing || CurrentState == State.Searching
+                    || CurrentState == State.Caught;
+        bool hidden = HideController.IsHidden;
         float target = CatCanSee() || (stayVisibleWhenChasing && hunting) ? 1f : 0f;
         alpha = Mathf.MoveTowards(alpha, target, fadeSpeed * Time.deltaTime);
         SetAlpha(alpha);
@@ -94,16 +97,18 @@ public class PresenceAI : MonoBehaviour
         {
             case State.Lurking:
                 Play(idleFrames, idleFps);
-                if (CatCanSee() && dist <= noticeRange) SetState(State.Noticing);
+                if (!hidden && CatCanSee() && dist <= noticeRange) SetState(State.Noticing);
                 break;
 
             case State.Noticing:
+                if (hidden) { SetState(State.Searching); break; }
                 Face(toCat.x);
                 PlayOnce(noticeFrames, noticeTime);
                 if (stateTimer >= noticeTime) SetState(State.Chasing);
                 break;
 
             case State.Chasing:
+                if (hidden) { SetState(State.Searching); break; }
                 Face(toCat.x);
                 Play(crawlFrames, crawlFps);
                 if (Mathf.Abs(toCat.x) <= pounceRange && Mathf.Abs(toCat.y) <= pounceHeight)
@@ -118,13 +123,21 @@ public class PresenceAI : MonoBehaviour
 
             case State.Pouncing:
                 if (pounceSprite != null) sr.sprite = pounceSprite;
-                if (stateTimer >= pounceTime) SetState(State.Chasing);
+                if (stateTimer >= pounceTime) SetState(hidden ? State.Searching : State.Chasing);
+                break;
+
+            case State.Searching:
+                // 고양이를 놓침: 제자리에서 좌우를 두리번거림
+                Play(idleFrames, idleFps);
+                Face(Mathf.Sin(stateTimer * 2.5f));
+                if (!hidden && CatCanSee() && dist <= noticeRange) SetState(State.Noticing);
+                else if (stateTimer >= searchTime) SetState(State.Returning);
                 break;
 
             case State.Returning:
                 Face(home.x - rb.position.x);
                 Play(crawlFrames, crawlFps * 0.6f);
-                if (CatCanSee() && dist <= noticeRange) SetState(State.Noticing);
+                if (!hidden && CatCanSee() && dist <= noticeRange) SetState(State.Noticing);
                 else if (Mathf.Abs(home.x - rb.position.x) < 0.05f) SetState(State.Lurking);
                 break;
         }
@@ -169,9 +182,13 @@ public class PresenceAI : MonoBehaviour
 
     private void CheckCatch()
     {
-        if (catCol != null && col.bounds.Intersects(catCol.bounds))
+        // 숨은 쪽은 잡히지 않음 (고양이 혼자 숨으면 밖에 있는 주인은 잡힐 수 있음)
+        bool catHidden = HideController.IsHidden;
+        bool ownerHidden = owner != null && owner.CurrentState == OwnerController.State.Hiding;
+
+        if (!catHidden && catCol != null && col.bounds.Intersects(catCol.bounds))
             Caught("고양이");
-        else if (ownerCol != null && col.bounds.Intersects(ownerCol.bounds))
+        else if (!ownerHidden && ownerCol != null && col.bounds.Intersects(ownerCol.bounds))
             Caught("주인");
     }
 
@@ -199,7 +216,8 @@ public class PresenceAI : MonoBehaviour
     // 서 있을 때와 기어갈 때 충돌 상자 크기를 바꿈
     private void ApplySize()
     {
-        bool standing = CurrentState == State.Lurking || CurrentState == State.Noticing;
+        bool standing = CurrentState == State.Lurking || CurrentState == State.Noticing
+                     || CurrentState == State.Searching;
         Vector2 size = standing ? standSize : crawlSize;
         col.size = size;
         col.offset = new Vector2(0f, size.y / 2f);

@@ -15,6 +15,10 @@ public class OwnerAnimator : MonoBehaviour
     [SerializeField] private Sprite[] walkFrames;      // owner_walk_01~04
     [SerializeField] private float walkFps = 6f;
 
+    [Header("숨기")]
+    [SerializeField] private Sprite[] hideFrames;      // owner_hide_01~02
+    [SerializeField] private float hideFps = 2f;
+
     [Header("떨림")]
     [SerializeField] private float shakeAmount = 0.02f;   // 0.01 = 1픽셀
     [SerializeField] private float shakeInterval = 0.05f; // 몇 초마다 위치를 바꿀지
@@ -55,6 +59,8 @@ public class OwnerAnimator : MonoBehaviour
 
         if (owner.CurrentState == OwnerController.State.Moving)
             Play(walkFrames, walkFps);
+        else if (owner.CurrentState == OwnerController.State.Hiding && hideFrames != null && hideFrames.Length > 0)
+            Play(hideFrames, hideFps);
         else
             Play(idleFrames, idleFps);
 

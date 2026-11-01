@@ -21,6 +21,10 @@ public class CatAnimator : MonoBehaviour
     [SerializeField] private Sprite land;              // cat_jump_04
     [SerializeField] private float landTime = 0.1f;
 
+    [Header("숨기")]
+    [SerializeField] private Sprite[] hideFrames;      // cat_hide_01~02 (눈 뜨기·깜빡임)
+    [SerializeField] private float hideFps = 1.5f;
+
     [Header("울기")]
     [SerializeField] private Sprite meow;              // cat_meow_02
     [SerializeField] private float meowTime = 0.35f;
@@ -55,8 +59,10 @@ public class CatAnimator : MonoBehaviour
         landTimer -= Time.deltaTime;
         meowTimer -= Time.deltaTime;
 
-        // 우선순위: 공중 > 착지 > 울기 > 걷기 > 대기
-        if (!grounded)
+        // 우선순위: 숨기 > 공중 > 착지 > 울기 > 걷기 > 대기
+        if (HideController.IsHidden && hideFrames != null && hideFrames.Length > 0)
+            Play("hide", hideFrames, hideFps);
+        else if (!grounded)
             Show(cat.VelocityY > 0f ? "jumpUp" : "jumpFall", cat.VelocityY > 0f ? jumpUp : jumpFall);
         else if (landTimer > 0f)
             Show("land", land);

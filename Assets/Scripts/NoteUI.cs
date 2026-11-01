@@ -23,6 +23,7 @@ public class NoteUI : MonoBehaviour
     private float prevTimeScale = 1f;
 
     private Text hint;
+    private Text extraHint;   // 숨기 등 다른 안내
     private Text counter;
     private GameObject panel;
     private Text panelTitle;
@@ -55,6 +56,14 @@ public class NoteUI : MonoBehaviour
     {
         nearby = note;
         hint.enabled = !IsReading;
+    }
+
+    // 다른 스크립트(숨기 등)의 안내 문구. null이면 숨김
+    public void SetExtraHint(string text)
+    {
+        if (extraHint == null) return;
+        extraHint.enabled = !string.IsNullOrEmpty(text) && !IsReading;
+        if (extraHint.enabled) extraHint.text = text;
     }
 
     public void ClearNearby(Note note)
@@ -134,6 +143,11 @@ public class NoteUI : MonoBehaviour
         hint = CreateText(root, hintText, 36, Color.white, TextAnchor.MiddleCenter);
         Place(hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0, 90), new Vector2(800, 60));
         hint.enabled = false;
+
+        // 숨기 등 다른 안내 (읽기 안내 바로 위)
+        extraHint = CreateText(root, "", 36, Color.white, TextAnchor.MiddleCenter);
+        Place(extraHint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0, 150), new Vector2(800, 60));
+        extraHint.enabled = false;
 
         // 모은 개수 (오른쪽 위)
         counter = CreateText(root, "", 32, new Color(0.9f, 0.85f, 0.7f), TextAnchor.MiddleRight);
