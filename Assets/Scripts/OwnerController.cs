@@ -28,6 +28,7 @@ public class OwnerController : MonoBehaviour
     private Collider2D col;
     private SpriteRenderer sr;
     private float targetX;
+    private Transform followTarget;   // 따라갈 고양이 (운 뒤 고양이가 움직여도 따라감)
 
     void Awake()
     {
@@ -39,13 +40,14 @@ public class OwnerController : MonoBehaviour
     }
 
     // 고양이가 들리는 거리에서 울었을 때 CatMeow가 호출
-    public void OnMeow(Vector2 catPos)
+    public void OnMeow(Transform cat)
     {
         switch (CurrentState)
         {
             case State.Waiting:
-                if (Mathf.Abs(catPos.x - rb.position.x) <= arriveDistance) return; // 이미 옆에 있음
-                targetX = catPos.x;
+                if (Mathf.Abs(cat.position.x - rb.position.x) <= arriveDistance) return; // 이미 옆에 있음
+                followTarget = cat;
+                targetX = cat.position.x;
                 SetState(State.Moving);
                 break;
             case State.Moving:
@@ -63,6 +65,7 @@ public class OwnerController : MonoBehaviour
         if (CurrentState != State.Moving) return;
 
         Vector2 pos = rb.position;
+        if (followTarget != null) targetX = followTarget.position.x; // 고양이의 지금 위치를 계속 따라감
         float dir = Mathf.Sign(targetX - pos.x);
         if (sr != null) sr.flipX = dir < 0f;
 

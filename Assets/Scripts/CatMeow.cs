@@ -38,7 +38,7 @@ public class CatMeow : MonoBehaviour
         if (dist <= hearRadius)
         {
             Debug.Log("야옹! 주인이 들었다");
-            owner.OnMeow(transform.position);
+            owner.OnMeow(transform);
         }
         else
         {
