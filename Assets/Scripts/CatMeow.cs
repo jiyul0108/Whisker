@@ -22,7 +22,7 @@ public class CatMeow : MonoBehaviour
     {
         var kb = Keyboard.current;
         if (kb == null) return;
-        if (NoteUI.IsReading || HideController.IsHidden) return; // 쪽지 읽는 중·숨은 중에는 울기 안 됨
+        if (HideController.IsHidden) return; // 숨은 중에는 울기 안 됨
 
         if (kb.eKey.wasPressedThisFrame && Time.time - lastMeowTime >= cooldown)
             Meow();

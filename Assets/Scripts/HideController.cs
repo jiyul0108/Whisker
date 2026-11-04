@@ -46,7 +46,6 @@ public class HideController : MonoBehaviour
 
     void Update()
     {
-        if (NoteUI.IsReading) return;
         if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
 
         HideSpot spot = IsHidden ? current : FindSpot();
@@ -116,11 +115,11 @@ public class HideController : MonoBehaviour
 
     private void UpdateHint(HideSpot spot)
     {
-        if (NoteUI.Instance == null) return;
-        if (IsHidden) NoteUI.Instance.SetExtraHint("S / ↓  나오기");
-        else if (spot == null) NoteUI.Instance.SetExtraHint(null);
-        else if (OwnerInside(spot)) NoteUI.Instance.SetExtraHint($"S / ↓  주인과 {spot.SpotName}에 숨기");
-        else NoteUI.Instance.SetExtraHint($"S / ↓  {spot.SpotName}에 숨기");
+        if (HintUI.Instance == null) return;
+        if (IsHidden) HintUI.Instance.SetHint("S / ↓  나오기");
+        else if (spot == null) HintUI.Instance.SetHint(null);
+        else if (OwnerInside(spot)) HintUI.Instance.SetHint($"S / ↓  주인과 {spot.SpotName}에 숨기");
+        else HintUI.Instance.SetHint($"S / ↓  {spot.SpotName}에 숨기");
     }
 
     // 숨기가 안 될 때 이유를 Console에 출력
