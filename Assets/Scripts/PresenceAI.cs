@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using UnityEngine;
 
-// 존재: 고양이 시야 안에서만 보이고, 눈이 마주치면 쫓아온다
-// 순찰 지점(Patrol Points)을 넣으면 여러 방을 돌아다니고, 비워두면 제자리에 숨어 있다
+// 존재: 맵을 알아서 돌아다니다가, 고양이와 눈이 마주치면 쫓아온다
+// 순찰 지점(Patrol Points)을 넣으면 그 지점들만 오가고,
+// 비워두면 씬의 방(Room)들 중 하나를 골라 알아서 돌아다닌다 (안전한 방 제외)
 [RequireComponent(typeof(Rigidbody2D), typeof(BoxCollider2D))]
 public class PresenceAI : MonoBehaviour
 {
@@ -28,6 +30,7 @@ public class PresenceAI : MonoBehaviour
     [SerializeField] private LayerMask wallLayer;      // 시야를 가리는 벽 (Ground)
     [SerializeField] private float fadeSpeed = 4f;     // 나타나고 사라지는 속도
     [SerializeField] private bool stayVisibleWhenChasing = true; // 한번 눈이 마주치면 쫓아오는 동안 계속 보임
+    [SerializeField] private bool alwaysVisible = true;  // 켜면 고양이가 안 봐도 사라지지 않고 항상 보임
 
     [Header("행동")]
     [SerializeField] private float noticeRange = 5f;   // 눈이 마주쳤다고 판단하는 거리
@@ -42,10 +45,16 @@ public class PresenceAI : MonoBehaviour
     [SerializeField] private float returnSpeed = 1.5f;
     [SerializeField] private float searchTime = 2.5f;  // 숨어버리면 이 시간 동안 두리번거리다 포기
 
-    [Header("순찰 (비워두면 제자리에 숨어 있음)")]
-    [SerializeField] private Transform[] patrolPoints;  // 순서대로 오가는 지점들 (여러 방에 걸쳐도 됨)
+    [Header("돌아다니기")]
+    [SerializeField] private bool autoRoam = true;       // 순찰 지점이 비어 있으면 방들을 알아서 돌아다님
+    [SerializeField] private string[] safeRoomNames = { "1번 방" }; // 존재가 일부러 가지 않는 방 (Room의 Room Name)
+    [SerializeField] private float roamMargin = 1f;      // 방 끝에서 이만큼 떨어진 곳까지만 목적지로 고름
+    [SerializeField, Range(0f, 1f)] private float stayInRoomChance = 0.4f; // 같은 방 안에서 다른 곳으로 갈 확률
     [SerializeField] private float patrolSpeed = 1.2f;  // 천천히 기어 다님
-    [SerializeField] private float patrolWait = 2f;     // 지점에 도착하면 이만큼 멈춰 있음
+    [SerializeField] private float patrolWait = 2f;     // 목적지에 도착하면 이만큼 멈춰 있음
+
+    [Header("순찰 지점 (넣으면 이 지점들만 오감, 비워두면 알아서 돌아다님)")]
+    [SerializeField] private Transform[] patrolPoints;  // 순서대로 오가는 지점들 (여러 방에 걸쳐도 됨)
     [SerializeField] private bool pingPong = true;      // 끝에 가면 되돌아옴 (끄면 처음으로 반복)
 
     [Header("충돌 범위 (발밑 기준)")]
@@ -66,7 +75,11 @@ public class PresenceAI : MonoBehaviour
     private int patrolIndex;
     private int patrolStep = 1;
 
+    private readonly List<Room> roamRooms = new List<Room>();
+    private float roamX;
+
     private bool HasPatrol => patrolPoints != null && patrolPoints.Length > 0;
+    private bool HasRoute => HasPatrol || (autoRoam && roamRooms.Count > 0);
 
     void Awake()
     {
@@ -83,8 +96,18 @@ public class PresenceAI : MonoBehaviour
         if (cat != null) catCol = cat.GetComponent<Collider2D>();
         if (owner != null) ownerCol = owner.GetComponent<Collider2D>();
         home = rb.position;
-        SetAlpha(0f);
-        if (HasPatrol) { patrolIndex = NearestPatrolIndex(); SetState(State.Patrolling); }
+        alpha = alwaysVisible ? 1f : 0f;
+        SetAlpha(alpha);
+    }
+
+    void Start()
+    {
+        // 돌아다닐 방 목록 (안전한 방 제외)
+        foreach (var room in FindObjectsByType<Room>(FindObjectsSortMode.None))
+            if (System.Array.IndexOf(safeRoomNames, room.RoomName) < 0) roamRooms.Add(room);
+
+        if (HasRoute) { PickNextTarget(true); SetState(State.Patrolling); }
+        Debug.Log($"존재: 돌아다닐 방 {roamRooms.Count}개, 순찰 지점 {(HasPatrol ? patrolPoints.Length : 0)}개");
     }
 
     void Update()
@@ -97,7 +120,7 @@ public class PresenceAI : MonoBehaviour
                     || CurrentState == State.Pouncing || CurrentState == State.Searching
                     || CurrentState == State.Caught;
         bool hidden = HideController.IsHidden;
-        float target = CatCanSee() || (stayVisibleWhenChasing && hunting) ? 1f : 0f;
+        float target = alwaysVisible || CatCanSee() || (stayVisibleWhenChasing && hunting) ? 1f : 0f;
         alpha = Mathf.MoveTowards(alpha, target, fadeSpeed * Time.deltaTime);
         SetAlpha(alpha);
 
@@ -110,15 +133,15 @@ public class PresenceAI : MonoBehaviour
             case State.Lurking:
                 Play(idleFrames, idleFps);
                 if (!hidden && CatCanSee() && dist <= noticeRange) SetState(State.Noticing);
-                else if (HasPatrol && stateTimer >= patrolWait) { NextPatrolPoint(); SetState(State.Patrolling); }
+                else if (HasRoute && stateTimer >= patrolWait) { PickNextTarget(false); SetState(State.Patrolling); }
                 break;
 
             case State.Patrolling:
-                // 천천히 기어서 다음 순찰 지점으로
-                Face(PatrolX() - rb.position.x);
+                // 천천히 기어서 다음 목적지로
+                Face(TargetX() - rb.position.x);
                 Play(crawlFrames, crawlFps * 0.5f);
                 if (!hidden && CatCanSee() && dist <= noticeRange) SetState(State.Noticing);
-                else if (Mathf.Abs(PatrolX() - rb.position.x) < 0.05f) SetState(State.Lurking);
+                else if (Mathf.Abs(TargetX() - rb.position.x) < 0.05f) SetState(State.Lurking);
                 break;
 
             case State.Noticing:
@@ -177,7 +200,7 @@ public class PresenceAI : MonoBehaviour
             case State.Chasing:   speed = chaseSpeed;  targetX = cat.transform.position.x; break;
             case State.Pouncing:  speed = pounceSpeed; targetX = rb.position.x + pounceDir; break;
             case State.Returning: speed = returnSpeed; targetX = home.x; break;
-            case State.Patrolling: speed = patrolSpeed; targetX = PatrolX(); break;
+            case State.Patrolling: speed = patrolSpeed; targetX = TargetX(); break;
         }
         if (speed <= 0f) return;
 
@@ -202,17 +225,50 @@ public class PresenceAI : MonoBehaviour
         return hit.collider == null;
     }
 
-    // 고양이를 놓쳤을 때: 순찰 중이었으면 가장 가까운 지점부터 다시 순찰, 아니면 원래 자리로
+    // 고양이를 놓쳤을 때: 다시 돌아다니기 (경로가 없으면 원래 자리로)
     private void GiveUp()
     {
-        if (HasPatrol) { patrolIndex = NearestPatrolIndex(); SetState(State.Patrolling); }
+        if (HasRoute) { PickNextTarget(true); SetState(State.Patrolling); }
         else SetState(State.Returning);
     }
 
-    private float PatrolX()
+    // 지금 향하는 목적지 X
+    private float TargetX()
     {
-        var p = patrolPoints[patrolIndex];
-        return p != null ? p.position.x : rb.position.x;
+        if (HasPatrol)
+        {
+            var p = patrolPoints[patrolIndex];
+            return p != null ? p.position.x : rb.position.x;
+        }
+        return roamX;
+    }
+
+    // 다음 목적지 고르기. fromHere = true면 순찰 지점 중 가장 가까운 곳부터
+    private void PickNextTarget(bool fromHere)
+    {
+        if (HasPatrol)
+        {
+            if (fromHere) patrolIndex = NearestPatrolIndex();
+            else NextPatrolPoint();
+            return;
+        }
+        if (roamRooms.Count == 0) return;
+
+        // 같은 방의 다른 곳, 아니면 다른 방으로
+        Room current = roamRooms.Find(r => r != null && r.Contains(rb.position.x));
+        Room next = current;
+        if (current == null || roamRooms.Count == 1 || Random.value > stayInRoomChance)
+        {
+            for (int tries = 0; tries < 10; tries++)
+            {
+                next = roamRooms[Random.Range(0, roamRooms.Count)];
+                if (next != current) break;
+            }
+        }
+        float left = next.Left + roamMargin;
+        float right = next.Right - roamMargin;
+        roamX = left < right ? Random.Range(left, right) : (next.Left + next.Right) * 0.5f;
+        Debug.Log($"존재: {next.RoomName}(x {roamX:0.0})으로 이동");
     }
 
     private int NearestPatrolIndex()
@@ -320,8 +376,8 @@ public class PresenceAI : MonoBehaviour
         Gizmos.color = Color.gray;
         Gizmos.DrawWireSphere(transform.position, loseRange);
 
-        // 순찰 경로
-        if (!HasPatrol) return;
+        // 순찰 경로 (순찰 지점을 넣은 경우)
+        if (patrolPoints == null || patrolPoints.Length == 0) return;
         Gizmos.color = new Color(0.8f, 0.2f, 1f);
         for (int i = 0; i < patrolPoints.Length; i++)
         {
