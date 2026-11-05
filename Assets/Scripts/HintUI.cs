@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -14,6 +15,10 @@ public class HintUI : MonoBehaviour
     private Text hint;      // 계속 떠 있는 안내 (예: S / ↓ 숨기)
     private Text message;   // 잠깐 떴다 사라지는 메시지 (예: 잠겨 있다)
     private Coroutine messageRoutine;
+
+    // 여러 곳(숨기, 문 등)에서 동시에 안내를 띄울 수 있게 출처별로 보관
+    private static readonly object DefaultSource = new object();
+    private readonly Dictionary<object, string> hints = new Dictionary<object, string>();
 
     void Awake()
     {
@@ -32,10 +37,18 @@ public class HintUI : MonoBehaviour
     }
 
     // 계속 떠 있는 안내. null이면 숨김
-    public void SetHint(string text)
+    public void SetHint(string text) => SetHint(DefaultSource, text);
+
+    // 출처별 안내 (예: 문은 자기 자신을 출처로 넘김). 여러 개면 나란히 보여줌
+    public void SetHint(object source, string text)
     {
-        hint.enabled = !string.IsNullOrEmpty(text);
-        if (hint.enabled) hint.text = text;
+        if (string.IsNullOrEmpty(text)) hints.Remove(source);
+        else hints[source] = text;
+
+        if (hint == null) return; // 씬을 닫는 중
+        string joined = string.Join("      ", hints.Values);
+        hint.enabled = joined.Length > 0;
+        hint.text = joined;
     }
 
     // 잠깐 보여주고 사라지는 메시지
