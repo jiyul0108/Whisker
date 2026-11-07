@@ -27,7 +27,7 @@ public static class KeyInventory
     {
         if (string.IsNullOrEmpty(id)) return;
         keys[id] = name;
-        Debug.Log($"열쇠 획득: {name} ({id}) / 가진 열쇠 {keys.Count}개");
+        GameLog.Info($"열쇠 획득: {name} ({id}) / 가진 열쇠 {keys.Count}개");
     }
 
     public static bool Has(string id) => !string.IsNullOrEmpty(id) && keys.ContainsKey(id);

@@ -85,11 +85,11 @@ public class HideController : MonoBehaviour
         {
             owner.Hide();
             SetAlpha(ownerSr, hiddenAlpha);
-            Debug.Log($"주인과 함께 {spot.SpotName}에 숨었다");
+            GameLog.Info($"주인과 함께 {spot.SpotName}에 숨었다");
         }
         else
         {
-            Debug.Log($"고양이 혼자 {spot.SpotName}에 숨었다 (주인은 밖에 있음)");
+            GameLog.Info($"고양이 혼자 {spot.SpotName}에 숨었다 (주인은 밖에 있음)");
         }
     }
 
@@ -104,7 +104,7 @@ public class HideController : MonoBehaviour
             SetAlpha(ownerSr, 1f);
             ownerHidden = false;
         }
-        Debug.Log("숨은 곳에서 나왔다");
+        GameLog.Info("숨은 곳에서 나왔다");
     }
 
     private static void SetAlpha(SpriteRenderer sr, float a)
@@ -125,8 +125,8 @@ public class HideController : MonoBehaviour
     // 숨기가 안 될 때 이유를 Console에 출력
     private void LogWhyNot()
     {
-        if (spots == null || spots.Length == 0) { Debug.Log("숨기 실패: 씬에 Hide Spot이 하나도 없어요"); return; }
-        if (!cat.IsGrounded) { Debug.Log("숨기 실패: 고양이가 바닥에 있어야 해요"); return; }
-        Debug.Log("숨기 실패: 고양이가 숨을 곳(Hide Spot) 범위 밖에 있어요");
+        if (spots == null || spots.Length == 0) { GameLog.Info("숨기 실패: 씬에 Hide Spot이 하나도 없어요"); return; }
+        if (!cat.IsGrounded) { GameLog.Info("숨기 실패: 고양이가 바닥에 있어야 해요"); return; }
+        GameLog.Info("숨기 실패: 고양이가 숨을 곳(Hide Spot) 범위 밖에 있어요");
     }
 }

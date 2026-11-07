@@ -37,12 +37,12 @@ public class CatMeow : MonoBehaviour
         float dist = Vector2.Distance(transform.position, owner.transform.position);
         if (dist <= hearRadius)
         {
-            Debug.Log("야옹! 주인이 들었다");
+            GameLog.Info("야옹! 주인이 들었다");
             owner.OnMeow(transform);
         }
         else
         {
-            Debug.Log($"야옹... 주인이 너무 멀다 (거리 {dist:F1})");
+            GameLog.Info($"야옹... 주인이 너무 멀다 (거리 {dist:F1})");
         }
     }
 

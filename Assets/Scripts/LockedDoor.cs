@@ -21,7 +21,12 @@ public class LockedDoor : MonoBehaviour
     [SerializeField] private string lockedMessage = "잠겨 있다";
     [SerializeField] private string openedMessage = "문이 열렸다";
 
-    [Header("열렸을 때 (나중에 탈출 엔딩 연결용)")]
+    [Header("탈출문 (켜면 열었을 때 탈출 성공)")]
+    [SerializeField] private bool isExit = false;
+    [SerializeField] private float ownerRange = 3f;          // 주인이 이 거리 안에 있어야 탈출 가능
+    [SerializeField] private string needOwnerMessage = "주인과 함께 나가야 한다";
+
+    [Header("열렸을 때 추가로 할 일")]
     [SerializeField] private UnityEvent onOpened;
 
     public bool IsOpen { get; private set; }
@@ -29,6 +34,7 @@ public class LockedDoor : MonoBehaviour
     private BoxCollider2D col;
     private SpriteRenderer sr;
     private CatController cat;
+    private OwnerController owner;
     private bool hinting;
 
     void Awake()
@@ -50,6 +56,7 @@ public class LockedDoor : MonoBehaviour
     void Start()
     {
         cat = FindAnyObjectByType<CatController>();
+        owner = FindAnyObjectByType<OwnerController>();
     }
 
     void Update()
@@ -80,6 +87,12 @@ public class LockedDoor : MonoBehaviour
         bool free = string.IsNullOrEmpty(keyId);
         if (free || KeyInventory.Has(keyId))
         {
+            // 탈출문은 주인이 가까이 있을 때만 (열쇠는 그대로 둠)
+            if (isExit && !OwnerNear())
+            {
+                if (HintUI.Instance != null) HintUI.Instance.ShowMessage(needOwnerMessage);
+                return;
+            }
             if (!free && consumeKey) KeyInventory.Remove(keyId);
             Open();
         }
@@ -97,15 +110,23 @@ public class LockedDoor : MonoBehaviour
         if (sr != null) sr.enabled = false;
         SetHint(false);
         if (HintUI.Instance != null) HintUI.Instance.ShowMessage(openedMessage);
-        Debug.Log($"{name}: 문이 열렸다");
+        GameLog.Info($"{name}: 문이 열렸다");
         onOpened?.Invoke();
+        if (isExit && GameManager.Instance != null) GameManager.Instance.GameClear();
+    }
+
+    private bool OwnerNear()
+    {
+        if (owner == null) return true; // 주인이 없는 테스트 씬
+        return Mathf.Abs(owner.transform.position.x - transform.position.x) <= ownerRange;
     }
 
     private void SetHint(bool on)
     {
         if (on == hinting) return;
         hinting = on;
-        if (HintUI.Instance != null) HintUI.Instance.SetHint(this, on ? "W / ↑  문 열기" : null);
+        string text = isExit ? "W / ↑  탈출하기" : "W / ↑  문 열기";
+        if (HintUI.Instance != null) HintUI.Instance.SetHint(this, on ? text : null);
     }
 
     void OnDisable()

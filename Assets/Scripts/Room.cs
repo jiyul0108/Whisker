@@ -10,6 +10,9 @@ public class Room : MonoBehaviour
     public string RoomName => roomName;
     public float Left => area.bounds.min.x;
     public float Right => area.bounds.max.x;
+    public float CenterY => Area.bounds.center.y;   // 층 구분용 (1층·지하·2층은 높이가 다름)
+
+    private BoxCollider2D Area => area != null ? area : (area = GetComponent<BoxCollider2D>());
 
     private BoxCollider2D area;
 
@@ -21,8 +24,14 @@ public class Room : MonoBehaviour
 
     public bool Contains(float x)
     {
-        if (area == null) area = GetComponent<BoxCollider2D>();
-        return x >= area.bounds.min.x && x < area.bounds.max.x;
+        return x >= Area.bounds.min.x && x < Area.bounds.max.x;
+    }
+
+    // 가로와 세로를 모두 확인 (층이 여러 개일 때)
+    public bool Contains(Vector2 p)
+    {
+        Bounds b = Area.bounds;
+        return p.x >= b.min.x && p.x < b.max.x && p.y >= b.min.y && p.y < b.max.y;
     }
 
     void OnDrawGizmos()

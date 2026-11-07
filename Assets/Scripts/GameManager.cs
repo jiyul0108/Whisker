@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-// 게임오버 → 화면 암전 → R 키로 처음부터 다시 시작
+// 게임오버 / 탈출 성공 → 화면 암전 → R 키로 처음부터 다시 시작
 // 게임오버 화면(검은 화면 + 글자)은 실행할 때 코드가 직접 만든다
 public class GameManager : MonoBehaviour
 {
@@ -17,7 +17,14 @@ public class GameManager : MonoBehaviour
     [SerializeField] private string caughtText = "CAUGHT";
     [SerializeField] private string restartText = "Press R to restart";
 
-    public bool IsGameOver { get; private set; }
+    [Header("탈출 성공 연출")]
+    [SerializeField] private string clearText = "ESCAPED";
+    [SerializeField] private string clearSubText = "Press R to play again";
+
+    public bool IsGameOver { get; private set; }   // 게임이 끝났는가 (잡힘 또는 탈출)
+    public bool IsCleared { get; private set; }    // 탈출에 성공했는가
+
+    private float startTime;
 
     private Image fadeImage;
     private Text titleText;
@@ -27,6 +34,7 @@ public class GameManager : MonoBehaviour
     {
         Instance = this;
         Time.timeScale = 1f;
+        startTime = Time.time;
         BuildUI();
     }
 
@@ -40,15 +48,32 @@ public class GameManager : MonoBehaviour
     {
         if (IsGameOver) return;
         IsGameOver = true;
-        Debug.Log($"게임오버: {reason}");
-        StartCoroutine(GameOverRoutine());
+        GameLog.Info($"게임오버: {reason}");
+        titleText.text = caughtText;
+        titleText.color = new Color(0.75f, 0.05f, 0.05f);
+        subText.text = restartText;
+        StartCoroutine(EndRoutine(freezeTime));
     }
 
-    private IEnumerator GameOverRoutine()
+    // 탈출문을 열었을 때 LockedDoor(탈출문)가 호출
+    public void GameClear()
     {
-        // 1) 모든 움직임 정지 (잡힌 장면을 잠깐 보여줌)
+        if (IsGameOver) return;
+        IsGameOver = true;
+        IsCleared = true;
+        float t = Time.time - startTime;
+        GameLog.Info($"탈출 성공! 플레이 시간 {t:0}초");
+        titleText.text = clearText;
+        titleText.color = new Color(0.85f, 0.8f, 0.6f);
+        subText.text = $"Time  {(int)t / 60:00}:{(int)t % 60:00}\n\n{clearSubText}";
+        StartCoroutine(EndRoutine(0.3f));
+    }
+
+    private IEnumerator EndRoutine(float freeze)
+    {
+        // 1) 모든 움직임 정지 (마지막 장면을 잠깐 보여줌)
         Time.timeScale = 0f;
-        yield return new WaitForSecondsRealtime(freezeTime);
+        yield return new WaitForSecondsRealtime(freeze);
 
         // 2) 화면 암전
         float t = 0f;
@@ -113,7 +138,7 @@ public class GameManager : MonoBehaviour
 
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         titleText = CreateText(canvasGO.transform, font, caughtText, 120, new Color(0.75f, 0.05f, 0.05f), 60f);
-        subText = CreateText(canvasGO.transform, font, restartText, 40, new Color(0.8f, 0.8f, 0.8f), -80f);
+        subText = CreateText(canvasGO.transform, font, restartText, 40, new Color(0.8f, 0.8f, 0.8f), -110f);
         titleText.enabled = false;
         subText.enabled = false;
     }

@@ -12,7 +12,8 @@ public class CameraFollow : MonoBehaviour
 
     [Header("높이 고정 (켜면 위아래로 안 움직임)")]
     [SerializeField] private bool lockY = true;
-    [SerializeField] private float fixedY = -0.6f;
+    [SerializeField] private float fixedY = -0.6f;          // Room이 없을 때 높이
+    [SerializeField] private float roomOffsetY = -0.1f;     // Room이 있으면: 방 가운데 높이 + 이 값 (층마다 높이가 다름)
 
     [Header("방 가로 범위 (Room이 없을 때만 사용)")]
     [SerializeField] private bool useBounds = true;
@@ -43,7 +44,7 @@ public class CameraFollow : MonoBehaviour
         bool changed = UpdateRoom(false);
 
         Vector3 goal = target.position + offset;
-        if (lockY) goal.y = fixedY;
+        if (lockY) goal.y = CurrentRoom != null ? CurrentRoom.CenterY + roomOffsetY : fixedY;
 
         if (useBounds)
         {
@@ -70,16 +71,17 @@ public class CameraFollow : MonoBehaviour
     private bool UpdateRoom(bool force)
     {
         if (rooms == null || rooms.Length == 0 || target == null) return false;
-        if (!force && CurrentRoom != null && CurrentRoom.Contains(target.position.x)) return false;
+        Vector2 p = target.position;
+        if (!force && CurrentRoom != null && CurrentRoom.Contains(p)) return false;
 
         foreach (var r in rooms)
         {
-            if (r == null || !r.Contains(target.position.x)) continue;
+            if (r == null || !r.Contains(p)) continue;
             bool changed = r != CurrentRoom;
             CurrentRoom = r;
             roomLeft = r.Left;
             roomRight = r.Right;
-            if (changed) Debug.Log($"방 이동: {r.RoomName}");
+            if (changed) GameLog.Info($"방 이동: {r.RoomName}");
             return changed && !force;
         }
         return false;

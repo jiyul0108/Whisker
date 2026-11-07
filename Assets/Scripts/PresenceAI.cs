@@ -77,6 +77,8 @@ public class PresenceAI : MonoBehaviour
 
     private readonly List<Room> roamRooms = new List<Room>();
     private float roamX;
+    private Room roamRoom;          // 목적지 방 (다른 층이면 계단을 타고 감)
+    private Stairs routeStairs;     // 지금 향하는 계단 (없으면 null)
 
     private bool HasPatrol => patrolPoints != null && patrolPoints.Length > 0;
     private bool HasRoute => HasPatrol || (autoRoam && roamRooms.Count > 0);
@@ -107,7 +109,7 @@ public class PresenceAI : MonoBehaviour
             if (System.Array.IndexOf(safeRoomNames, room.RoomName) < 0) roamRooms.Add(room);
 
         if (HasRoute) { PickNextTarget(true); SetState(State.Patrolling); }
-        Debug.Log($"존재: 돌아다닐 방 {roamRooms.Count}개, 순찰 지점 {(HasPatrol ? patrolPoints.Length : 0)}개");
+        GameLog.Info($"존재: 돌아다닐 방 {roamRooms.Count}개, 순찰 지점 {(HasPatrol ? patrolPoints.Length : 0)}개");
     }
 
     void Update()
@@ -137,11 +139,16 @@ public class PresenceAI : MonoBehaviour
                 break;
 
             case State.Patrolling:
-                // 천천히 기어서 다음 목적지로
-                Face(TargetX() - rb.position.x);
+                // 천천히 기어서 다음 목적지로 (다른 층이면 먼저 계단으로)
+                float goX = TargetX();
+                Face(goX - rb.position.x);
                 Play(crawlFrames, crawlFps * 0.5f);
                 if (!hidden && CatCanSee() && dist <= noticeRange) SetState(State.Noticing);
-                else if (Mathf.Abs(TargetX() - rb.position.x) < 0.05f) SetState(State.Lurking);
+                else if (Mathf.Abs(goX - rb.position.x) < 0.05f)
+                {
+                    if (routeStairs != null) TakeStairs(routeStairs);
+                    else SetState(State.Lurking);
+                }
                 break;
 
             case State.Noticing:
@@ -232,15 +239,32 @@ public class PresenceAI : MonoBehaviour
         else SetState(State.Returning);
     }
 
-    // 지금 향하는 목적지 X
+    // 지금 향하는 목적지 X (목적지 방이 다른 층이면 이 층의 계단 X)
     private float TargetX()
     {
+        routeStairs = null;
         if (HasPatrol)
         {
             var p = patrolPoints[patrolIndex];
             return p != null ? p.position.x : rb.position.x;
         }
+        if (roamRoom != null && !Stairs.SameFloor(roamRoom.CenterY - 2f, rb.position.y))
+        {
+            routeStairs = Stairs.FindRoute(rb.position, roamRoom.CenterY - 2f);
+            if (routeStairs != null) return routeStairs.X;
+        }
         return roamX;
+    }
+
+    // 계단을 타고 다른 층으로 (존재는 잠금과 상관없이 통과)
+    private void TakeStairs(Stairs s)
+    {
+        if (s.Linked == null) { routeStairs = null; return; }
+        Vector2 to = new Vector2(s.Linked.X, s.Linked.FloorY);
+        rb.position = to;
+        transform.position = to;
+        routeStairs = null;
+        GameLog.Info($"존재: 계단으로 이동 ({s.name} → {s.Linked.name})");
     }
 
     // 다음 목적지 고르기. fromHere = true면 순찰 지점 중 가장 가까운 곳부터
@@ -255,7 +279,7 @@ public class PresenceAI : MonoBehaviour
         if (roamRooms.Count == 0) return;
 
         // 같은 방의 다른 곳, 아니면 다른 방으로
-        Room current = roamRooms.Find(r => r != null && r.Contains(rb.position.x));
+        Room current = roamRooms.Find(r => r != null && r.Contains(rb.position));
         Room next = current;
         if (current == null || roamRooms.Count == 1 || Random.value > stayInRoomChance)
         {
@@ -268,7 +292,8 @@ public class PresenceAI : MonoBehaviour
         float left = next.Left + roamMargin;
         float right = next.Right - roamMargin;
         roamX = left < right ? Random.Range(left, right) : (next.Left + next.Right) * 0.5f;
-        Debug.Log($"존재: {next.RoomName}(x {roamX:0.0})으로 이동");
+        roamRoom = next;
+        GameLog.Info($"존재: {next.RoomName}(x {roamX:0.0})으로 이동");
     }
 
     private int NearestPatrolIndex()
@@ -312,7 +337,7 @@ public class PresenceAI : MonoBehaviour
         if (pounceSprite != null) sr.sprite = pounceSprite;
         alpha = 1f;          // 숨어 있다가 잡아도 모습이 보이게
         SetAlpha(1f);
-        Debug.Log($"존재에게 {who}이(가) 잡혔다!");
+        GameLog.Info($"존재에게 {who}이(가) 잡혔다!");
 
         if (GameManager.Instance != null) GameManager.Instance.GameOver($"{who}이(가) 잡힘");
         else Debug.LogWarning("GameManager가 씬에 없어서 게임오버를 할 수 없어요");
@@ -324,7 +349,7 @@ public class PresenceAI : MonoBehaviour
         stateTimer = 0f;
         loseTimer = 0f;
         ApplySize();
-        Debug.Log($"존재 상태: {s}");
+        GameLog.Info($"존재 상태: {s}");
     }
 
     // 서 있을 때와 기어갈 때 충돌 상자 크기를 바꿈

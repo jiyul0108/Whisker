@@ -60,18 +60,33 @@ public class OwnerController : MonoBehaviour
     public void Hide() { SetState(State.Hiding); }
     public void Unhide() { if (CurrentState == State.Hiding) SetState(State.Waiting); }
 
+    // 계단으로 고양이와 함께 다른 층으로 (Stairs가 호출)
+    public void TeleportTo(Vector2 pos)
+    {
+        rb.position = pos;
+        transform.position = pos;
+        rb.linearVelocity = Vector2.zero;
+        SetState(State.Waiting);
+    }
+
     void FixedUpdate()
     {
         if (CurrentState != State.Moving) return;
 
         Vector2 pos = rb.position;
+        // 고양이가 다른 층으로 가버리면 멈춤 (계단을 혼자 탄 경우)
+        if (followTarget != null && Mathf.Abs(followTarget.position.y - pos.y) > 5f)
+        {
+            SetState(State.Waiting);
+            return;
+        }
         if (followTarget != null) targetX = followTarget.position.x; // 고양이의 지금 위치를 계속 따라감
         float dir = Mathf.Sign(targetX - pos.x);
         if (sr != null) sr.flipX = dir < 0f;
 
         if (Blocked(dir))
         {
-            Debug.Log("주인: 앞이 막혀서 멈춤");
+            GameLog.Info("주인: 앞이 막혀서 멈춤");
             SetState(State.Waiting);
             return;
         }
@@ -101,7 +116,7 @@ public class OwnerController : MonoBehaviour
     {
         CurrentState = s;
         ApplyColor();
-        Debug.Log($"주인 상태: {s}");
+        GameLog.Info($"주인 상태: {s}");
     }
 
     private void ApplyColor()
