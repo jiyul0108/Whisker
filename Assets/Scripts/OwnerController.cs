@@ -29,12 +29,14 @@ public class OwnerController : MonoBehaviour
     private SpriteRenderer sr;
     private float targetX;
     private Transform followTarget;   // 따라갈 고양이 (운 뒤 고양이가 움직여도 따라감)
+    private OwnerFear fear;           // 공포도가 높을수록 느려짐 (없으면 평소 속도)
 
     void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
         col = GetComponent<Collider2D>();
         sr = GetComponentInChildren<SpriteRenderer>(); // 자식 Visual의 그림
+        fear = GetComponent<OwnerFear>();
         if (groundLayer.value == 0) groundLayer = LayerMask.GetMask("Ground");
         ApplyColor();
     }
@@ -91,7 +93,8 @@ public class OwnerController : MonoBehaviour
             return;
         }
 
-        float newX = Mathf.MoveTowards(pos.x, targetX, moveSpeed * Time.fixedDeltaTime);
+        float speed = moveSpeed * (fear != null ? fear.SpeedMultiplier : 1f);
+        float newX = Mathf.MoveTowards(pos.x, targetX, speed * Time.fixedDeltaTime);
         rb.MovePosition(new Vector2(newX, pos.y));
 
         if (Mathf.Abs(targetX - newX) <= arriveDistance) SetState(State.Waiting);
@@ -104,8 +107,10 @@ public class OwnerController : MonoBehaviour
         float halfW = b.extents.x;
 
         // 벽·낮은 천장: 몸 크기(조금 작게)의 상자를 앞쪽으로 밀어서 부딪히는지 확인
+        // 고양이 전용 물건(의자)은 벽으로 보지 않고 지나감
         Vector2 boxSize = new Vector2(b.size.x * 0.9f, b.size.y * 0.9f);
-        if (Physics2D.BoxCast(b.center, boxSize, 0f, Vector2.right * dir, wallCheckDistance, groundLayer)) return true;
+        foreach (var hit in Physics2D.BoxCastAll(b.center, boxSize, 0f, Vector2.right * dir, wallCheckDistance, groundLayer))
+            if (hit.collider != null && hit.collider != col && !CatOnlyProp.Is(hit.collider)) return true;
 
         // 낭떠러지: 앞발 위치에서 아래로
         Vector2 foot = new Vector2(b.center.x + dir * (halfW + wallCheckDistance), b.min.y + 0.1f);

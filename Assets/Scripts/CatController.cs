@@ -39,6 +39,8 @@ public class CatController : MonoBehaviour
         moveInput = 0f;
         if (kb == null) return;
         if (HideController.IsHidden) { jumpPressed = false; return; } // 숨은 중에는 조작 안 됨
+        if (ClimbSpot.IsClimbing) { jumpPressed = false; return; }    // 벽에 붙어 있는 중
+        if (GameInput.Blocked) { jumpPressed = false; return; }       // 팝업·연출 중
 
         if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) moveInput -= 1f;
         if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) moveInput += 1f;
@@ -52,6 +54,7 @@ public class CatController : MonoBehaviour
     void FixedUpdate()
     {
         isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+        if (ClimbSpot.IsClimbing) return;   // 벽을 타는 동안은 ClimbSpot이 움직임
 
         rb.linearVelocity = new Vector2(moveInput * moveSpeed, rb.linearVelocity.y);
 

@@ -26,6 +26,15 @@ public class CameraFollow : MonoBehaviour
     private Vector3 velocity;
     private Room[] rooms;
 
+    // 연출용: 고양이 대신 보여줄 자리 (PowerEvent가 2층 문 열리는 장면을 보여줄 때)
+    private bool hasFocus;
+    private Vector2 focus;
+    private bool focusChanged;
+
+    // 화면 흔들림
+    private float shakeTimer;
+    private float shakeAmount;
+
     void Awake()
     {
         cam = GetComponent<Camera>();
@@ -34,16 +43,18 @@ public class CameraFollow : MonoBehaviour
     void Start()
     {
         rooms = FindObjectsByType<Room>(FindObjectsSortMode.None);
-        UpdateRoom(true);
+        if (target != null) UpdateRoom(true, target.position);
     }
 
     void LateUpdate()
     {
         if (target == null) return;
 
-        bool changed = UpdateRoom(false);
+        Vector3 follow = hasFocus ? (Vector3)focus : target.position;
+        bool changed = UpdateRoom(false, follow) || focusChanged;
+        focusChanged = false;
 
-        Vector3 goal = target.position + offset;
+        Vector3 goal = follow + offset;
         if (lockY) goal.y = CurrentRoom != null ? CurrentRoom.CenterY + roomOffsetY : fixedY;
 
         if (useBounds)
@@ -65,13 +76,40 @@ public class CameraFollow : MonoBehaviour
         {
             transform.position = Vector3.SmoothDamp(transform.position, goal, ref velocity, smoothTime);
         }
+
+        if (shakeTimer > 0f)
+        {
+            shakeTimer -= Time.unscaledDeltaTime;
+            transform.position += (Vector3)(Random.insideUnitCircle * shakeAmount);
+        }
+    }
+
+    // 연출: 이 자리를 보여줌 (방이 다르면 바로 넘어감)
+    public void ShowPoint(Vector2 p)
+    {
+        hasFocus = true;
+        focus = p;
+        focusChanged = true;
+    }
+
+    // 연출 끝: 다시 고양이를 따라감
+    public void ClearShowPoint()
+    {
+        hasFocus = false;
+        focusChanged = true;
+        CurrentRoom = null;
+    }
+
+    public void Shake(float time, float amount)
+    {
+        shakeTimer = time;
+        shakeAmount = amount;
     }
 
     // 고양이가 있는 방을 찾아 범위를 바꿈. 방이 바뀌었으면 true
-    private bool UpdateRoom(bool force)
+    private bool UpdateRoom(bool force, Vector2 p)
     {
         if (rooms == null || rooms.Length == 0 || target == null) return false;
-        Vector2 p = target.position;
         if (!force && CurrentRoom != null && CurrentRoom.Contains(p)) return false;
 
         foreach (var r in rooms)

@@ -7,7 +7,8 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody2D), typeof(BoxCollider2D))]
 public class PresenceAI : MonoBehaviour
 {
-    public enum State { Lurking, Patrolling, Noticing, Chasing, Pouncing, Searching, Returning, Caught }
+    // Sweeping = 전원 이벤트에서 지하를 훑고 지나감, Dropping·Roaring·Hunting = 추격 이벤트 (천장에서 떨어짐 → 울부짖음 → 끝까지 쫓아옴)
+    public enum State { Lurking, Patrolling, Noticing, Chasing, Pouncing, Searching, Returning, Caught, Sweeping, Dropping, Roaring, Hunting }
 
     [Header("대상")]
     [SerializeField] private CatController cat;
@@ -57,6 +58,10 @@ public class PresenceAI : MonoBehaviour
     [SerializeField] private Transform[] patrolPoints;  // 순서대로 오가는 지점들 (여러 방에 걸쳐도 됨)
     [SerializeField] private bool pingPong = true;      // 끝에 가면 되돌아옴 (끄면 처음으로 반복)
 
+    [Header("추격 이벤트 (ChaseEvent)")]
+    [SerializeField] private float dropTime = 0.6f;    // 천장에서 떨어지는 시간
+    [SerializeField] private float roarTime = 2f;      // 떨어진 뒤 움직이기 전까지 (도망칠 시간)
+
     [Header("충돌 범위 (발밑 기준)")]
     [SerializeField] private Vector2 standSize = new Vector2(0.9f, 1.8f); // 서 있을 때 (대기·발견)
     [SerializeField] private Vector2 crawlSize = new Vector2(1.8f, 1.0f); // 기어갈 때 (추격·덮치기·복귀)
@@ -79,6 +84,17 @@ public class PresenceAI : MonoBehaviour
     private float roamX;
     private Room roamRoom;          // 목적지 방 (다른 층이면 계단을 타고 감)
     private Stairs routeStairs;     // 지금 향하는 계단 (없으면 null)
+
+    // 이벤트용
+    private bool paused;
+    private bool relentless;        // 추격 이벤트: 포기하지 않고 층을 넘어 쫓아옴
+    private float[] sweepXs;
+    private int sweepIndex;
+    private float sweepSpeed;
+    private System.Action onSweepDone;
+    private Vector2 dropFrom, dropLand;
+    private float huntFloorY;
+    private float huntSpeed;
 
     private bool HasPatrol => patrolPoints != null && patrolPoints.Length > 0;
     private bool HasRoute => HasPatrol || (autoRoam && roamRooms.Count > 0);
@@ -114,7 +130,7 @@ public class PresenceAI : MonoBehaviour
 
     void Update()
     {
-        if (cat == null) return;
+        if (cat == null || paused) return;
         stateTimer += Time.deltaTime;
 
         // 1) 보이는지 판단해서 투명도 조절
@@ -174,8 +190,51 @@ public class PresenceAI : MonoBehaviour
 
             case State.Pouncing:
                 if (pounceSprite != null) sr.sprite = pounceSprite;
-                if (stateTimer >= pounceTime) SetState(hidden ? State.Searching : State.Chasing);
+                if (stateTimer >= pounceTime) SetState(relentless ? State.Hunting : hidden ? State.Searching : State.Chasing);
                 break;
+
+            case State.Sweeping:
+            {
+                // 정해진 지점들을 차례로 훑고 지나감 (숨지 않은 쪽은 닿으면 잡힘)
+                float gx = sweepXs[sweepIndex];
+                Face(gx - rb.position.x);
+                Play(crawlFrames, crawlFps * 0.7f);
+                if (Mathf.Abs(gx - rb.position.x) < 0.05f && ++sweepIndex >= sweepXs.Length) FinishSweep();
+                break;
+            }
+
+            case State.Dropping:
+            {
+                float k = Mathf.Clamp01(stateTimer / dropTime);
+                MoveTo(Vector2.Lerp(dropFrom, dropLand, k * k));
+                if (pounceSprite != null) sr.sprite = pounceSprite;
+                if (k >= 1f) SetState(State.Roaring);
+                break;
+            }
+
+            case State.Roaring:
+                Face(toCat.x);
+                PlayOnce(noticeFrames, roarTime);
+                if (stateTimer >= roarTime)
+                {
+                    MoveTo(new Vector2(rb.position.x, huntFloorY));   // 수술대에서 바닥으로 내려옴
+                    SetState(State.Hunting);
+                }
+                break;
+
+            case State.Hunting:
+            {
+                float gx = HuntTargetX();
+                Face(gx - rb.position.x);
+                Play(crawlFrames, crawlFps);
+                if (routeStairs == null && Mathf.Abs(toCat.x) <= pounceRange && Mathf.Abs(toCat.y) <= pounceHeight)
+                {
+                    pounceDir = toCat.x >= 0 ? 1 : -1;
+                    SetState(State.Pouncing);
+                }
+                else if (routeStairs != null && Mathf.Abs(gx - rb.position.x) < 0.05f) TakeStairs(routeStairs);
+                break;
+            }
 
             case State.Searching:
                 // 고양이를 놓침: 제자리에서 좌우를 두리번거림
@@ -194,11 +253,13 @@ public class PresenceAI : MonoBehaviour
         }
 
         // 3) 닿았는지 확인
-        if (CurrentState != State.Caught && CurrentState != State.Returning) CheckCatch();
+        if (CurrentState != State.Caught && CurrentState != State.Returning
+            && CurrentState != State.Dropping && CurrentState != State.Roaring) CheckCatch();
     }
 
     void FixedUpdate()
     {
+        if (paused || cat == null) return;
         float speed = 0f;
         float targetX = rb.position.x;
 
@@ -208,6 +269,14 @@ public class PresenceAI : MonoBehaviour
             case State.Pouncing:  speed = pounceSpeed; targetX = rb.position.x + pounceDir; break;
             case State.Returning: speed = returnSpeed; targetX = home.x; break;
             case State.Patrolling: speed = patrolSpeed; targetX = TargetX(); break;
+            case State.Sweeping:
+                speed = sweepSpeed;
+                targetX = sweepXs[Mathf.Min(sweepIndex, sweepXs.Length - 1)];
+                break;
+            case State.Hunting:
+                speed = huntSpeed * (stateTimer < 1f ? 0.5f : 1f);   // 처음 1초는 천천히 (덮친 뒤에도)
+                targetX = HuntTargetX();
+                break;
         }
         if (speed <= 0f) return;
 
@@ -230,6 +299,69 @@ public class PresenceAI : MonoBehaviour
         // 벽에 가려지면 안 보임
         RaycastHit2D hit = Physics2D.Linecast(eye, me, wallLayer);
         return hit.collider == null;
+    }
+
+    // ---------- 이벤트용 (PowerEvent · ChaseEvent가 호출) ----------
+
+    // 연출 중 멈춤
+    public void SetPaused(bool p) { paused = p; }
+
+    // 지하 훑기: start에 나타나 xs 지점들을 차례로 지나간 뒤 계단으로 올라감
+    public void StartSweep(Vector2 start, float[] xs, float speed, System.Action done)
+    {
+        relentless = false;
+        MoveTo(start);
+        sweepXs = xs;
+        sweepIndex = 0;
+        sweepSpeed = speed;
+        onSweepDone = done;
+        alpha = 1f;
+        SetAlpha(1f);
+        SetState(State.Sweeping);
+        GameLog.Info("존재: 지하를 훑기 시작");
+    }
+
+    private void FinishSweep()
+    {
+        var cb = onSweepDone;
+        onSweepDone = null;
+        // 바로 옆의 계단으로 올라감
+        Stairs up = Stairs.FindRoute(rb.position, rb.position.y + 20f);
+        if (up != null && Mathf.Abs(up.X - rb.position.x) < 1.5f) TakeStairs(up);
+        if (HasRoute) { PickNextTarget(true); SetState(State.Patrolling); }
+        else SetState(State.Lurking);
+        cb?.Invoke();
+    }
+
+    // 추격: from에서 land로 떨어진 뒤 울부짖고, 바닥(floorY)으로 내려와 끝까지 쫓아옴
+    public void StartHunt(Vector2 from, Vector2 land, float floorY, float speed)
+    {
+        relentless = true;
+        dropFrom = from;
+        dropLand = land;
+        huntFloorY = floorY;
+        huntSpeed = speed;
+        MoveTo(from);
+        alpha = 1f;
+        SetAlpha(1f);
+        SetState(State.Dropping);
+        GameLog.Info("존재: 추격 시작");
+    }
+
+    // 추격 목표: 같은 층이면 고양이, 다른 층이면 고양이 층으로 가는 계단
+    private float HuntTargetX()
+    {
+        routeStairs = null;
+        Vector2 c = cat.transform.position;
+        if (Stairs.SameFloor(c.y, rb.position.y)) return c.x;
+        routeStairs = Stairs.FindRoute(rb.position, c.y);
+        return routeStairs != null ? routeStairs.X : rb.position.x;
+    }
+
+    private void MoveTo(Vector2 p)
+    {
+        rb.position = p;
+        transform.position = p;
     }
 
     // 고양이를 놓쳤을 때: 다시 돌아다니기 (경로가 없으면 원래 자리로)
@@ -356,7 +488,8 @@ public class PresenceAI : MonoBehaviour
     private void ApplySize()
     {
         bool standing = CurrentState == State.Lurking || CurrentState == State.Noticing
-                     || CurrentState == State.Searching;
+                     || CurrentState == State.Searching || CurrentState == State.Roaring
+                     || CurrentState == State.Dropping;
         Vector2 size = standing ? standSize : crawlSize;
         col.size = size;
         col.offset = new Vector2(0f, size.y / 2f);

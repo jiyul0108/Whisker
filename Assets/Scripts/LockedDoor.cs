@@ -62,9 +62,9 @@ public class LockedDoor : MonoBehaviour
     void Update()
     {
         if (IsOpen || cat == null) return;
-        if (GameManager.Instance != null && GameManager.Instance.IsGameOver) { SetHint(false); return; }
+        if (GameInput.Blocked) { SetHint(false); return; }
 
-        bool near = CatNear() && !HideController.IsHidden;
+        bool near = CatNear() && !HideController.IsHidden && !ClimbSpot.IsClimbing;
         SetHint(near);
         if (!near) return;
 

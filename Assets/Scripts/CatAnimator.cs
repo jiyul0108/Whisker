@@ -25,6 +25,10 @@ public class CatAnimator : MonoBehaviour
     [SerializeField] private Sprite[] hideFrames;      // cat_hide_01~02 (눈 뜨기·깜빡임)
     [SerializeField] private float hideFps = 1.5f;
 
+    [Header("벽 타기")]
+    [SerializeField] private Sprite[] climbFrames;     // cat_wallclimb_01~04
+    [SerializeField] private float climbFps = 8f;
+
     [Header("울기")]
     [SerializeField] private Sprite meow;              // cat_meow_02
     [SerializeField] private float meowTime = 0.35f;
@@ -59,8 +63,13 @@ public class CatAnimator : MonoBehaviour
         landTimer -= Time.deltaTime;
         meowTimer -= Time.deltaTime;
 
-        // 우선순위: 숨기 > 공중 > 착지 > 울기 > 걷기 > 대기
-        if (HideController.IsHidden && hideFrames != null && hideFrames.Length > 0)
+        // 우선순위: 벽 타기 > 숨기 > 공중 > 착지 > 울기 > 걷기 > 대기
+        if (ClimbSpot.IsClimbing && climbFrames != null && climbFrames.Length > 0)
+        {
+            if (ClimbSpot.IsMoving) Play("climb", climbFrames, climbFps);
+            else Show("climbHold", climbFrames[0]);   // 다 올라가면 매달린 자세로 멈춤
+        }
+        else if (HideController.IsHidden && hideFrames != null && hideFrames.Length > 0)
             Play("hide", hideFrames, hideFps);
         else if (!grounded)
             Show(cat.VelocityY > 0f ? "jumpUp" : "jumpFall", cat.VelocityY > 0f ? jumpUp : jumpFall);

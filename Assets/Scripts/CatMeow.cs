@@ -23,6 +23,7 @@ public class CatMeow : MonoBehaviour
         var kb = Keyboard.current;
         if (kb == null) return;
         if (HideController.IsHidden) return; // 숨은 중에는 울기 안 됨
+        if (GameInput.Blocked) return;       // 팝업·연출 중
 
         if (kb.eKey.wasPressedThisFrame && Time.time - lastMeowTime >= cooldown)
             Meow();
@@ -39,6 +40,8 @@ public class CatMeow : MonoBehaviour
         {
             GameLog.Info("야옹! 주인이 들었다");
             owner.OnMeow(transform);
+            var fear = owner.GetComponent<OwnerFear>();
+            if (fear != null) fear.Calm();   // 고양이 소리를 들으면 조금 안심
         }
         else
         {

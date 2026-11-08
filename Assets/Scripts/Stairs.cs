@@ -26,6 +26,10 @@ public class Stairs : MonoBehaviour
     [SerializeField] private GameObject lockedDoorVisual;   // 잠겨 있는 동안 보이는 문 그림 (자식, 기준점 발밑 가운데)
     [SerializeField] private Transform lockVisual;           // 문에 달린 쇠사슬·자물쇠 (문의 자식, 열 때 떨어짐)
 
+    [Header("전자 잠금 (Required Flag를 넣으면 열쇠 대신 진행으로 열림. 예: POWER)")]
+    [SerializeField] private string requiredFlag = "";
+    [SerializeField] private string flagLockedMessage = "전자 잠금으로 잠겨 있다. 전기가 들어오지 않는다";
+
     [Header("문 열리는 동작")]
     [SerializeField] private float shakeTime = 0.25f;   // 덜컹거림
     [SerializeField] private float lockFallTime = 0.45f; // 자물쇠 떨어짐
@@ -54,7 +58,7 @@ public class Stairs : MonoBehaviour
     {
         col = GetComponent<BoxCollider2D>();
         col.isTrigger = true;
-        unlocked = string.IsNullOrEmpty(keyId);
+        unlocked = string.IsNullOrEmpty(keyId) && string.IsNullOrEmpty(requiredFlag);
         IsTraveling = false;
         if (lockedDoorVisual != null) lockedDoorVisual.SetActive(!unlocked);
     }
@@ -73,9 +77,9 @@ public class Stairs : MonoBehaviour
     void Update()
     {
         if (cat == null || IsTraveling || opening) return;
-        if (GameManager.Instance != null && GameManager.Instance.IsGameOver) { SetHint(false); return; }
+        if (GameInput.Blocked) { SetHint(false); return; }
 
-        bool near = CatNear() && !HideController.IsHidden;
+        bool near = CatNear() && !HideController.IsHidden && !ClimbSpot.IsClimbing;
         SetHint(near);
         if (!near) return;
 
@@ -94,6 +98,20 @@ public class Stairs : MonoBehaviour
 
     private void TryUse()
     {
+        // 전원 이벤트 중: 존재가 계단으로 내려오는 중이라 도망칠 수 없음
+        if (PowerEvent.BlockStairs)
+        {
+            if (HintUI.Instance != null) HintUI.Instance.ShowMessage("계단에서 무언가 내려오고 있다… 숨어야 한다!", 2f);
+            return;
+        }
+
+        if (!unlocked && !string.IsNullOrEmpty(requiredFlag))
+        {
+            if (GameFlags.Has(requiredFlag)) StartCoroutine(RemoteUnlock());
+            else if (HintUI.Instance != null) HintUI.Instance.ShowMessage(flagLockedMessage, 2f);
+            return;
+        }
+
         if (!unlocked)
         {
             if (!KeyInventory.Has(keyId))
@@ -147,6 +165,16 @@ public class Stairs : MonoBehaviour
 
         if (!withOwner && HintUI.Instance != null && owner != null)
             HintUI.Instance.ShowMessage("주인은 따라오지 못했다");
+    }
+
+    // 멀리서 잠금 해제 (PowerEvent가 카메라로 보여주며 호출). 문 열리는 동작이 끝날 때까지 기다릴 수 있음
+    public IEnumerator RemoteUnlock()
+    {
+        if (unlocked) yield break;
+        unlocked = true;
+        SetHint(false);
+        if (lockedDoorVisual != null && lockedDoorVisual.activeSelf) yield return OpenDoor();
+        GameLog.Info($"{name}: 잠금 해제");
     }
 
     // 문 열리는 동작: 덜컹거림 → 쇠사슬·자물쇠가 떨어짐 → 문이 왼쪽 경첩을 중심으로 안쪽으로 열림
@@ -243,7 +271,7 @@ public class Stairs : MonoBehaviour
     {
         if (on == hinting) return;
         hinting = on;
-        string text = unlocked ? label : "문 열기";
+        string text = unlocked ? label : (string.IsNullOrEmpty(requiredFlag) ? "문 열기" : "조사하기");
         if (HintUI.Instance != null) HintUI.Instance.SetHint(this, on ? $"W / ↑  {text}" : null);
     }
 

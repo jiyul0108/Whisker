@@ -12,6 +12,9 @@ public class HintUI : MonoBehaviour
     [Header("한글 폰트 (Assets/Fonts/Galmuri11)")]
     [SerializeField] private Font font;
 
+    // 다른 UI(인벤토리·팝업·공포도)도 같은 한글 폰트를 씀
+    public Font Font => font;
+
     private Text hint;      // 계속 떠 있는 안내 (예: S / ↓ 숨기)
     private Text message;   // 잠깐 떴다 사라지는 메시지 (예: 잠겨 있다)
     private Coroutine messageRoutine;

@@ -46,9 +46,21 @@ public class HideController : MonoBehaviour
 
     void Update()
     {
-        if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
+        if (GameInput.Blocked || ClimbSpot.IsClimbing) { ClearHint(); return; }
 
         HideSpot spot = IsHidden ? current : FindSpot();
+
+        // 추격 중에는 숨을 수 없음
+        if (ChaseEvent.Active && !IsHidden)
+        {
+            if (HintUI.Instance != null) HintUI.Instance.SetHint(spot != null ? "숨을 곳이 없다!" : null);
+            var k = Keyboard.current;
+            if (spot != null && k != null && (k.sKey.wasPressedThisFrame || k.downArrowKey.wasPressedThisFrame)
+                && HintUI.Instance != null)
+                HintUI.Instance.ShowMessage("숨을 곳이 없다! 도망쳐야 한다", 1.5f);
+            return;
+        }
+
         UpdateHint(spot);
 
         var kb = Keyboard.current;
@@ -111,6 +123,11 @@ public class HideController : MonoBehaviour
     {
         if (sr == null) return;
         Color c = sr.color; c.a = a; sr.color = c;
+    }
+
+    private void ClearHint()
+    {
+        if (HintUI.Instance != null && !IsHidden) HintUI.Instance.SetHint(null);
     }
 
     private void UpdateHint(HideSpot spot)
