@@ -10,6 +10,8 @@ public class HideController : MonoBehaviour
 
     [SerializeField] private OwnerController owner;
     [SerializeField] private float hiddenAlpha = 0.6f;     // 숨은 동안 반투명
+    [SerializeField] private AudioClip hideClip;           // 숨기·나오기 소리 (비워두면 소리 없음)
+    [SerializeField, Range(0f, 1f)] private float hideVolume = 0.8f;
 
     private CatController cat;
     private Collider2D catCol;
@@ -53,11 +55,7 @@ public class HideController : MonoBehaviour
         // 추격 중에는 숨을 수 없음
         if (ChaseEvent.Active && !IsHidden)
         {
-            if (HintUI.Instance != null) HintUI.Instance.SetHint(spot != null ? "숨을 곳이 없다!" : null);
-            var k = Keyboard.current;
-            if (spot != null && k != null && (k.sKey.wasPressedThisFrame || k.downArrowKey.wasPressedThisFrame)
-                && HintUI.Instance != null)
-                HintUI.Instance.ShowMessage("숨을 곳이 없다! 도망쳐야 한다", 1.5f);
+            if (HintUI.Instance != null) HintUI.Instance.SetHint(null);   // 숨기 안내를 띄우지 않음 (도망쳐야 함)
             return;
         }
 
@@ -91,6 +89,7 @@ public class HideController : MonoBehaviour
         current = spot;
         IsHidden = true;
         SetAlpha(catSr, hiddenAlpha);
+        Sfx.Play(hideClip, hideVolume);
 
         ownerHidden = OwnerInside(spot);
         if (ownerHidden)
@@ -110,6 +109,7 @@ public class HideController : MonoBehaviour
         IsHidden = false;
         current = null;
         SetAlpha(catSr, 1f);
+        Sfx.Play(hideClip, hideVolume * 0.7f);   // 나올 때는 조금 작게
         if (ownerHidden)
         {
             owner.Unhide();
@@ -133,10 +133,10 @@ public class HideController : MonoBehaviour
     private void UpdateHint(HideSpot spot)
     {
         if (HintUI.Instance == null) return;
-        if (IsHidden) HintUI.Instance.SetHint("S / ↓  나오기");
+        if (IsHidden) HintUI.Instance.SetHint("↓  나오기");
         else if (spot == null) HintUI.Instance.SetHint(null);
-        else if (OwnerInside(spot)) HintUI.Instance.SetHint($"S / ↓  주인과 {spot.SpotName}에 숨기");
-        else HintUI.Instance.SetHint($"S / ↓  {spot.SpotName}에 숨기");
+        else if (OwnerInside(spot)) HintUI.Instance.SetHint(Loc.F("↓  주인과 {0}에 숨기", Loc.T(spot.SpotName)));
+        else HintUI.Instance.SetHint(Loc.F("↓  {0}에 숨기", Loc.T(spot.SpotName)));
     }
 
     // 숨기가 안 될 때 이유를 Console에 출력

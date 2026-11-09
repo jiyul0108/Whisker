@@ -37,6 +37,10 @@ public static class WhiskerMapBuilder
         new RoomDef("10번 방", 13.95f,  F2, 17.88f, "room10_bg"),               // 수술실 (수술대 = 조각 붙이기)
     };
 
+    // 1번 방: 조작 안내 그림을 넣으려고 왼쪽으로 16칸 늘림 (-8 ~ 9 → -24 ~ 9, 배경도 3300px로 늘림)
+    private const float Room1Left = -24f;
+    private const float Room1Right = 9f;
+
     [MenuItem("Whisker/추가한 방 배치하기")]
     private static void Build()
     {
@@ -44,6 +48,17 @@ public static class WhiskerMapBuilder
         {
             EditorUtility.DisplayDialog("Whisker", "Play를 끈 상태에서 실행해 주세요.", "확인");
             return;
+        }
+
+        // 반드시 Main 씬에 배치 (다른 씬이 열려 있으면 Main을 열고 진행)
+        const string MainPath = "Assets/Scenes/Prototype/Main.unity";
+        var active = EditorSceneManager.GetActiveScene();
+        if (active.path != MainPath)
+        {
+            if (!EditorUtility.DisplayDialog("Whisker", $"지금 열린 씬은 '{active.name}'이에요.\n배치는 Main 씬에만 할 수 있어요. Main을 열고 배치할까요?",
+                                             "Main 열고 배치", "취소")) return;
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            EditorSceneManager.OpenScene(MainPath);
         }
 
         Sprite pillar = LoadSprite("Assets/Art/Props/exit_pillar.png");
@@ -94,13 +109,34 @@ public static class WhiskerMapBuilder
             Pillar(root, $"Pillar_{x}_R", x + 0.28f, y, true, pillar);
         }
 
+        // 2-1) 1번 방 늘리기 (방 범위·배경·왼쪽 벽·고양이와 주인 시작 위치)
+        SetupRoom1();
+
+        // 2-2) 1번 → 2번 방 출입구: 둘 다 넘어가면 문이 닫힘 (1번 방 쪽 출입구 기둥 위치 8.72에 맞춤)
+        GameObject door1 = Child(root, "Door_Room1", new Vector3(9f, F1, 0f));   // 출구 기둥(8.72)과 입구 기둥(9.28) 사이
+        var d1col = door1.AddComponent<BoxCollider2D>();
+        d1col.size = new Vector2(0.5f, 6f);
+        d1col.offset = new Vector2(0f, 3f);
+        var d1 = door1.AddComponent<AutoCloseDoor>();
+        SetProps(d1, so =>
+        {
+            so.FindProperty("closeClip").objectReferenceValue = LoadClip("sfx_door_close");
+            so.FindProperty("swingTime").floatValue = 1.65f;   // 끼익 소리 길이에 맞춰 천천히 닫히고, 끝에 쾅
+        });
+        var d1v = new GameObject("Visual");
+        Undo.RegisterCreatedObjectUndo(d1v, "방 배치");
+        d1v.transform.SetParent(door1.transform, false);
+        var d1sr = d1v.AddComponent<SpriteRenderer>();
+        d1sr.sprite = LoadSprite("Assets/Art/Props/room_door_closed.png");
+        d1sr.sortingOrder = 4;   // 기둥(3)의 어두운 출입구를 덮음
+
         // 3) 바닥·벽: 1층은 씬의 Floor·WallRight를 늘리고 옮김, 지하·2층은 새로 만듦
         float f1Right = 68.88f + 17.88f;
         GameObject floor = GameObject.Find("Floor");
         if (floor != null)
         {
             Undo.RecordObject(floor.transform, "바닥 늘리기");
-            float l = -10.5f, rr = f1Right + 1.5f;
+            float l = Room1Left - 2.5f, rr = f1Right + 1.5f;
             Vector3 p = floor.transform.position;
             floor.transform.position = new Vector3((l + rr) * 0.5f, p.y, p.z);
             Vector3 s = floor.transform.localScale;
@@ -134,21 +170,33 @@ public static class WhiskerMapBuilder
         Link(downFrom2F, up2F);
 
         // 5) 열쇠: 녹슨 열쇠만 (작은 열쇠·출구 열쇠는 퍼즐로 바뀜)
-        Key(root, "Key_A", new Vector3(46f, F1 + 1.64f, 0f), "A", "녹슨 열쇠", key);       // 3번 복도 손잡이 위
+        Key(root, "Key_A", new Vector3(46f, F1 + 0.1f, 0f), "A", "녹슨 열쇠", key);        // 3번 복도 바닥에 떨어져 있음
+        var keyA = GameObject.Find("Key_A");
+        if (keyA != null) SetProps(keyA.GetComponent<KeyItem>(), so => so.FindProperty("bobHeight").floatValue = 0f);   // 바닥이라 둥실거리지 않음
         DestroyIfFound("Key_B");
         DestroyIfFound("Key_C");
 
         // 6) 숨을 곳 (배경에 그려진 물건 위치)
+        // 3번 복도 오른쪽: 2번 방 배경의 책상과 같은 그림 (desk.png) + 숨을 곳
+        Prop(root, "Desk_03", LoadSprite("Assets/Art/Props/desk.png"), new Vector3(44.6f, F1 + 0.47f, 0f));   // 다리가 캐릭터 발 높이에, 녹슨 열쇠(46) 왼쪽
+        Hide(root, "Hide_Desk_03", new Vector3(44.6f, F1, 0f), new Vector2(2.0f, 1.2f), "책상");
         Hide(root, "Hide_Boxes_07", new Vector3(72.285f, B1, 0f), new Vector2(2.4f, 1.2f), "상자 더미");
         Hide(root, "Hide_Desk_08", new Vector3(58.885f, F2, 0f), new Vector2(3.0f, 1.2f), "책상");
         Hide(root, "Hide_Table_10", new Vector3(23.12f, F2, 0f), new Vector2(3.0f, 1.2f), "수술대");
-        MoveDesk01(24.53f);   // 2번 방 배경에서 책상을 오른쪽으로 옮겼으므로 숨을 곳도 옮김
+        MoveDesk01(23.26f);   // 2번 방 배경의 책상 위치에 맞춰 숨을 곳도 옮김 (문과 너무 가까워 128px 왼쪽으로)
 
         // 7) 탈출문: 5번 로비의 쇠사슬 정문 (그림은 배경에 있으므로 판정만)
         ExitDoor(root, "ExitDoor_Lobby", 84.06f, F1, 2.8f, "C", "출구 열쇠");
 
         // 8) 예전 시험용 잠긴 문은 이제 계단 잠금으로 대신함
         DestroyIfFound("LockedDoor_01");
+
+        // 9) 깜짝 등장 연출 (고양이가 처음 지나갈 때 한 번, 고양이가 바라보는 앞쪽에 잠깐 보였다 사라짐)
+        Glimpse(root, "Glimpse_Corridor_03", 28.5f, F1, "", "", 34f);   // 3번 복도에 처음 들어서면 → 쪽지(x 34) 바로 위에 서 있음
+        Note(root, "FuseNote_03", 34f, F1);                                // 퓨즈 위치를 암시하는 쪽지
+        Glimpse(root, "Glimpse_Basement_06", 52.5f, B1, "", "");       // 지하에 내려와 왼쪽(지하 복도)으로 가면
+        Glimpse(root, "Glimpse_2F_08", 61f, F2, "", "");               // 2층에 처음 올라와 진료실로 가면
+        Glimpse(root, "Glimpse_Ward_09", 48.5f, F2, "", "");           // 병실에 처음 들어서면
 
         // 9) 퍼즐
         BuildPuzzles(root, fusebox, safe, chairSprite, key);
@@ -158,6 +206,13 @@ public static class WhiskerMapBuilder
         var pso = new SerializedObject(power);
         pso.FindProperty("doorStairs").objectReferenceValue = up2F;
         pso.FindProperty("arrivalStairs").objectReferenceValue = upFromB1;
+        pso.FindProperty("hideTime").floatValue = 6f;      // 문이 열리고 존재가 내려오기까지 (퓨즈를 끼우는 동안에는 존재가 오지 않음)
+        pso.FindProperty("sweepSpeed").floatValue = 2f;    // 지하를 훑는 속도 조금 느리게
+        // 훑는 순서: 계단(55)을 내려오면 바로 오른쪽 창고 끝(80.2) → 왼쪽 지하 복도(46.2) → 계단(55)
+        var sweep = pso.FindProperty("sweepXs");
+        float[] sweepOrder = { 80.2f, 46.2f, 55f };
+        sweep.arraySize = sweepOrder.Length;
+        for (int i = 0; i < sweepOrder.Length; i++) sweep.GetArrayElementAtIndex(i).floatValue = sweepOrder[i];
         pso.FindProperty("thudClip").objectReferenceValue = LoadClip("sfx_power_thud");
         pso.FindProperty("doorClip").objectReferenceValue = LoadClip("sfx_door_open");
         pso.ApplyModifiedPropertiesWithoutUndo();
@@ -173,10 +228,29 @@ public static class WhiskerMapBuilder
 
         // 11) 화면 (오른쪽 위 아이템 + Tab 인벤토리, 가운데 팝업)
         var ui = Child(root, "UI_Managers", Vector3.zero);
-        ui.AddComponent<InventoryUI>();
+        var inv = ui.AddComponent<InventoryUI>();
+        SetProps(inv, so => so.FindProperty("pickupClip").objectReferenceValue = LoadClip("sfx_item_pickup"));
+        var amb = ui.AddComponent<Ambience>();   // 배경 소리
+        // 1번 방 벽의 그림 안내 (이동·점프·울기·숨기·조사·가방). 그림은 Resources/Tutorial에서 스스로 불러옴
+        Child(root, "TutorialHints", Vector3.zero).AddComponent<TutorialHints>();
+        SetProps(amb, so => so.FindProperty("loopClip").objectReferenceValue = LoadClip("amb_hospital_loop"));
+        // Esc 일시정지·설정 메뉴 (소리 크기를 바꿀 때 아이템 줍는 소리로 미리 들려줌)
+        var pause = ui.AddComponent<PauseMenu>();
+        SetProps(pause, so =>
+        {
+            so.FindProperty("previewClip").objectReferenceValue = LoadClip("sfx_item_pickup");
+            so.FindProperty("font").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Galmuri11.ttf");
+        });
+        ui.AddComponent<OwnerStatusUI>();   // 가운데 위: 주인이 따라오는 중인지 표시
         var craft = ui.AddComponent<CraftUI>();
         SetProps(craft, so => so.FindProperty("loopClip").objectReferenceValue = LoadClip("sfx_craft_loop"));
         var popup = ui.AddComponent<PopupUI>();
+        SetProps(popup, so =>
+        {
+            so.FindProperty("safeOpenClip").objectReferenceValue = LoadClip("sfx_safe_open");
+            so.FindProperty("safeFailClip").objectReferenceValue = LoadClip("sfx_safe_fail");
+            so.FindProperty("paperClip").objectReferenceValue = LoadClip("sfx_paper");
+        });
         if (bedCloseup != null)
         {
             var uso = new SerializedObject(popup);
@@ -188,8 +262,9 @@ public static class WhiskerMapBuilder
         SetupCatAndOwner();
 
         EditorSceneManager.MarkSceneDirty(root.scene);
+        EditorSceneManager.SaveScene(root.scene);   // 저장까지 한 번에 (Ctrl+S 안 해도 됨)
         Selection.activeGameObject = root;
-        Debug.Log($"방 {Rooms.Length}개 + 계단 4개 + 퍼즐·이벤트 배치 완료. Ctrl+S로 씬을 저장하세요.");
+        Debug.Log($"[{root.scene.name}] 방 {Rooms.Length}개 + 계단 4개 + 퍼즐·이벤트 배치 완료, 씬 저장함");
     }
 
     // ---------- 퍼즐 ----------
@@ -206,10 +281,13 @@ public static class WhiskerMapBuilder
         crb.linearDamping = 2f;
         crb.freezeRotation = true;
         crb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+        crb.interpolation = RigidbodyInterpolation2D.Interpolate;   // 높은 프레임에서도 부드럽게
         var ccol = chair.AddComponent<BoxCollider2D>();
         ccol.size = new Vector2(0.48f, 0.42f);     // 좌석 높이까지만 (올라설 수 있게)
         ccol.offset = new Vector2(0f, 0.21f);
         chair.AddComponent<CatOnlyProp>();         // 주인·존재는 부딪히지 않고 지나감
+        var chairSound = chair.AddComponent<ChairSound>();   // 밀 때 끌리는 소리
+        SetProps(chairSound, so => so.FindProperty("dragClip").objectReferenceValue = LoadClip("sfx_chair_drag"));
 
         Vector3 clock = new Vector3(21.8f, F1 + 2.22f, 0f);
         var climb = Child(root, "ClimbSpot_Clock", clock).AddComponent<ClimbSpot>();
@@ -221,8 +299,9 @@ public static class WhiskerMapBuilder
         SetProps(clockI, so =>
         {
             so.FindProperty("requireClimbing").boolValue = true;
-            so.FindProperty("requiredFlag").stringValue = "FUSEBOX_CHECKED";
-            so.FindProperty("flagMissingMessage").stringValue = "멈춰 버린 시계다. 바늘이 움직이지 않는다";
+            // 쪽지로 위치를 알 수 있으므로 두꺼비집을 먼저 조사하지 않아도 퓨즈가 나옴
+            so.FindProperty("requiredFlag").stringValue = "";
+            so.FindProperty("flagMissingMessage").stringValue = "";
             so.FindProperty("rewardItem").stringValue = "FUSE";
             so.FindProperty("successMessage").stringValue = "시계 뒤에 무언가 붙어 있다… 퓨즈를 얻었다";
             so.FindProperty("doneMessage").stringValue = "멈춘 시계다";
@@ -230,13 +309,15 @@ public static class WhiskerMapBuilder
 
         // [7번 방] 두꺼비집 (퓨즈 없으면 조사만 → FUSEBOX_CHECKED, 퓨즈 있으면 전원 이벤트)
         Prop(root, "Fusebox_07", fusebox, new Vector3(77.2f, B1 + 1.5f, 0f));
-        var fuseI = Inter(root, "FuseboxCheck_07", new Vector3(77.2f, B1, 0f), new Vector2(1.4f, 2.5f), 1.25f, "두꺼비집 조사하기");
+        var fuseI = Inter(root, "FuseboxCheck_07", new Vector3(77.2f, B1, 0f), new Vector2(1.4f, 2.5f), 1.25f, "두꺼비집 작동하기");
         SetProps(fuseI, so =>
         {
             SetArray(so, "requiredItems", "FUSE");
-            so.FindProperty("missingMessage").stringValue = "두꺼비집이다. 퓨즈가 하나 빠져 있다…";
+            so.FindProperty("missingMessage").stringValue = "작동하지 않는다. 퓨즈가 하나 빠져 있다…";
+            so.FindProperty("alwaysShowMessages").boolValue = true;   // 두꺼비집 문구는 노란 메시지로
             so.FindProperty("listMissing").boolValue = false;
             so.FindProperty("missingSetsFlag").stringValue = "FUSEBOX_CHECKED";
+            so.FindProperty("readyLabel").stringValue = "퓨즈 끼우기";
             so.FindProperty("successMessage").stringValue = "퓨즈를 끼웠다";
             so.FindProperty("useGauge").boolValue = true;
             so.FindProperty("craftTime").floatValue = 6f;
@@ -328,6 +409,7 @@ public static class WhiskerMapBuilder
             so.FindProperty("action").enumValueIndex = (int)Interactable.Action.Craft;
             so.FindProperty("craftTime").floatValue = 10f;
             so.FindProperty("craftTitle").stringValue = "전기 소작기로 열쇠 조각을 붙이는 중…";
+            so.FindProperty("readyLabel").stringValue = "열쇠 조각 붙이기";
             so.FindProperty("revealObject").objectReferenceValue = exitKey;
             so.FindProperty("revealDropHeight").floatValue = 1.4f;
         });
@@ -349,6 +431,17 @@ public static class WhiskerMapBuilder
     // ---------- 고양이·주인 ----------
     private static void SetupCatAndOwner()
     {
+        // 물리는 1초에 50번 움직이므로, 그 사이 프레임을 채워 그리게 함 (60·120·144 프레임에서 끊김 없이)
+        foreach (var rb in new Rigidbody2D[] {
+                     Object.FindAnyObjectByType<CatController>()?.GetComponent<Rigidbody2D>(),
+                     Object.FindAnyObjectByType<OwnerController>()?.GetComponent<Rigidbody2D>(),
+                     Object.FindAnyObjectByType<PresenceAI>(FindObjectsInactive.Include)?.GetComponent<Rigidbody2D>() })
+        {
+            if (rb == null) continue;
+            Undo.RecordObject(rb, "보간 켜기");
+            rb.interpolation = RigidbodyInterpolation2D.Interpolate;
+        }
+
         var cat = Object.FindAnyObjectByType<CatController>();
         if (cat != null)
         {
@@ -370,13 +463,85 @@ public static class WhiskerMapBuilder
             var hso = new SerializedObject(hb);
             hso.FindProperty("beatClip").objectReferenceValue = LoadClip("sfx_heartbeat");
             hso.ApplyModifiedProperties();
+            // 숨기·나오기 소리
+            var hide = cat.GetComponent<HideController>();
+            if (hide != null)
+            {
+                var hdso = new SerializedObject(hide);
+                hdso.FindProperty("hideClip").objectReferenceValue = LoadClip("sfx_hide");
+                hdso.ApplyModifiedProperties();
+            }
+            // 고양이 걸음 소리는 쓰지 않음 (예전에 붙인 것이 있으면 제거)
+            var catStep = cat.GetComponent<FootstepLoop>();
+            if (catStep != null) Undo.DestroyObjectImmediate(catStep);
+            // 울음소리
+            var meow = cat.GetComponent<CatMeow>();
+            if (meow != null)
+            {
+                var mso = new SerializedObject(meow);
+                var arr = mso.FindProperty("meowClips");
+                arr.arraySize = 3;   // 울 때마다 3개 중 하나
+                for (int i = 0; i < 3; i++)
+                    arr.GetArrayElementAtIndex(i).objectReferenceValue = LoadClip($"sfx_meow_{i + 1}");
+                mso.ApplyModifiedProperties();
+            }
+            // 시야 (주변은 어둡게, 눈에서 원뿔 모양 빛)
+            if (cat.GetComponent<CatVision>() == null) Undo.AddComponent<CatVision>(cat.gameObject);
         }
         else Debug.LogWarning("고양이(CatController)를 찾지 못했어요");
+
+        // 존재 발견 소리, 잡혔을 때 소리
+        var presence = Object.FindAnyObjectByType<PresenceAI>(FindObjectsInactive.Include);
+        if (presence != null)
+        {
+            var pso = new SerializedObject(presence);
+            pso.FindProperty("noticeClip").objectReferenceValue = LoadClip("sfx_presence_notice");
+            pso.FindProperty("crawlClip").objectReferenceValue = LoadClip("sfx_presence_crawl");   // 기어다니는 소리
+            pso.FindProperty("stairsClip").objectReferenceValue = LoadClip("sfx_stairs");          // 계단 (고양이와 같은 소리)
+            // 나타나기: 조금 더 멀리서, 천천히 드러나게 (갑자기 튀어나오는 느낌 줄이기)
+            pso.FindProperty("appearDistance").vector2Value = new Vector2(8f, 11f);
+            pso.FindProperty("emergeTime").floatValue = 2.5f;
+            // 고양이가 원뿔 빛으로 보는 거리(7)에서 존재도 고양이를 발견
+            pso.FindProperty("noticeRange").floatValue = 7f;
+            pso.FindProperty("sightRadius").floatValue = 7f;
+            // 1번 방에는 절대 들어가지 않음. 2번 방에는 갑자기 나타나지 않지만 쫓아서 들어올 수는 있음
+            SetArray(pso, "safeRoomNames", "1번 방");
+            SetArray(pso, "noAppearRoomNames", "2번 방");
+            // 쫓을 때 쉽게 포기하지 않음 (멀어지면 빨라지고, 더 멀리·더 오래 떨어져야 포기)
+            pso.FindProperty("loseRange").floatValue = 16f;
+            pso.FindProperty("loseTime").floatValue = 6f;
+            // 깜짝 등장: 다가가면 사라지며 들리는 웃음소리 (파일이 없으면 소리 없음)
+            pso.FindProperty("glimpseClip").objectReferenceValue = LoadClip("sfx_presence_laugh");
+            pso.FindProperty("glimpseVolume").floatValue = 0.8f;
+            pso.FindProperty("glimpseChance").floatValue = 0f;   // 무작위 깜짝 등장 끄기 (정해진 자리에서만)
+            pso.ApplyModifiedProperties();
+        }
+        else Debug.LogWarning("존재(PresenceAI)를 찾지 못했어요");
+        var gm = Object.FindAnyObjectByType<GameManager>();
+        if (gm != null)
+        {
+            var gso = new SerializedObject(gm);
+            gso.FindProperty("caughtClip").objectReferenceValue = LoadClip("sfx_caught");
+            gso.FindProperty("clearClip").objectReferenceValue = LoadClip("sfx_escape");
+            gso.FindProperty("font").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Galmuri11.ttf");
+            gso.ApplyModifiedProperties();
+        }
 
         var owner = Object.FindAnyObjectByType<OwnerController>();
         if (owner != null)
         {
-            if (owner.GetComponent<OwnerFear>() == null) Undo.AddComponent<OwnerFear>(owner.gameObject);
+            var fear = owner.GetComponent<OwnerFear>();
+            if (fear == null) fear = Undo.AddComponent<OwnerFear>(owner.gameObject);
+            var fso = new SerializedObject(fear);
+            fso.FindProperty("screamClip").objectReferenceValue = LoadClip("sfx_owner_scream");   // 공포도가 가득 차면 비명
+            fso.ApplyModifiedProperties();
+            // 걸음 소리 (작게)
+            var ownerStep = owner.GetComponent<FootstepLoop>();
+            if (ownerStep == null) ownerStep = Undo.AddComponent<FootstepLoop>(owner.gameObject);
+            var oso = new SerializedObject(ownerStep);
+            oso.FindProperty("stepClip").objectReferenceValue = LoadClip("sfx_owner_step");
+            oso.FindProperty("volume").floatValue = 0.35f;
+            oso.ApplyModifiedProperties();
         }
         else Debug.LogWarning("주인(OwnerController)을 찾지 못했어요");
     }
@@ -428,13 +593,54 @@ public static class WhiskerMapBuilder
         return Child(root, name, pos);
     }
 
+    private static void SetupRoom1()
+    {
+        GameObject room = GameObject.Find("Room01");
+        if (room != null)
+        {
+            Undo.RecordObject(room.transform, "1번 방 늘리기");
+            Vector3 p = room.transform.position;
+            room.transform.position = new Vector3((Room1Left + Room1Right) * 0.5f, p.y, p.z);
+            var box = room.GetComponent<BoxCollider2D>();
+            Undo.RecordObject(box, "1번 방 늘리기");
+            box.size = new Vector2(Room1Right - Room1Left, box.size.y);
+            box.offset = Vector2.zero;
+        }
+        else Debug.LogWarning("Room01을 찾지 못했어요");
+
+        MoveX("Room01_BG", Room1Left);          // 배경 기준점이 왼쪽 끝
+        MoveX("WallLeft", Room1Left - 0.5f);
+        MoveX("Cat", Room1Left + 2f);           // 안내 그림을 차례로 지나가며 오른쪽으로
+        MoveX("Owner", -7.2f);                 // 안내 그림 'E 울기'(TutorialHints 3번째, x -7.2) 아래
+    }
+
+    private static void MoveX(string name, float x)
+    {
+        GameObject go = GameObject.Find(name);
+        if (go == null) { Debug.LogWarning(name + "을(를) 찾지 못했어요"); return; }
+        Undo.RecordObject(go.transform, "옮기기");
+        Vector3 p = go.transform.position;
+        go.transform.position = new Vector3(x, p.y, p.z);
+    }
+
     private static void MoveDesk01(float x)
     {
         GameObject desk = GameObject.Find("Desk_01");
-        if (desk == null) { Debug.LogWarning("Desk_01을 찾지 못했어요. 2번 방 책상 숨을 곳을 X 24.53으로 옮겨 주세요."); return; }
+        if (desk == null) { Debug.LogWarning($"Desk_01을 찾지 못했어요. 2번 방 책상 숨을 곳을 X {x}으로 옮겨 주세요."); return; }
         Undo.RecordObject(desk.transform, "책상 숨을 곳 옮기기");
         Vector3 p = desk.transform.position;
         desk.transform.position = new Vector3(x, p.y, p.z);
+
+        // 책상은 배경에 그려져 있으므로 임시 박스 그림은 끄고, 안내 문구도 "책상"으로
+        var sr = desk.GetComponent<SpriteRenderer>();
+        if (sr != null) { Undo.RecordObject(sr, "박스 그림 끄기"); sr.enabled = false; }
+        var spot = desk.GetComponent<HideSpot>();
+        if (spot != null)
+        {
+            var so = new SerializedObject(spot);
+            so.FindProperty("spotName").stringValue = "책상";
+            so.ApplyModifiedProperties();
+        }
     }
 
     private static void SetGround(GameObject go)
@@ -442,6 +648,41 @@ public static class WhiskerMapBuilder
         int ground = LayerMask.NameToLayer("Ground");
         if (ground >= 0) go.layer = ground;
         else Debug.LogWarning("Ground 레이어가 없어요");
+    }
+
+    // 바닥에 떨어진 쪽지: 병원 안 예비 퓨즈 위치 (진짜는 1층 대기실 = 2번 방 벽시계 뒤, 나머지는 가짜)
+    private static void Note(GameObject root, string name, float x, float floorY)
+    {
+        Prop(root, name + "_Visual", LoadSprite("Assets/Art/Props/note.png"), new Vector3(x, floorY + 0.05f, 0f));
+        var note = Inter(root, name, new Vector3(x, floorY, 0f), new Vector2(1.0f, 1.0f), 0.5f, "쪽지 읽기");
+        SetProps(note, so =>
+        {
+            so.FindProperty("action").enumValueIndex = (int)Interactable.Action.ShowText;
+            so.FindProperty("popupTitle").stringValue = "시설과 메모";
+            so.FindProperty("popupBody").stringValue =
+                "예비 퓨즈 보관 위치\n\n" +
+                "- 지하 보일러실 배전반 옆\n" +
+                "- 2층 간호사실 사물함\n" +
+                "- 1층 대기실 벽시계 뒤\n" +
+                "- 수술실 약품 선반 아래";
+        });
+    }
+
+    private static void Glimpse(GameObject root, string name, float x, float floorY, string flag, string item, float fixedX = float.NaN)
+    {
+        GameObject go = Child(root, name, new Vector3(x, floorY, 0f));
+        var box = go.AddComponent<BoxCollider2D>();
+        box.size = new Vector2(3f, 3f);    // 넓게 (존재가 바빠서 못 나오면 범위 안에 있는 동안 다시 시도)
+        box.offset = new Vector2(0f, 1.5f);
+        box.isTrigger = true;
+        var g = go.AddComponent<GlimpseTrigger>();
+        SetProps(g, so =>
+        {
+            so.FindProperty("requiredFlag").stringValue = flag;
+            so.FindProperty("requiredItem").stringValue = item;
+            so.FindProperty("useFixedX").boolValue = !float.IsNaN(fixedX);
+            so.FindProperty("fixedX").floatValue = float.IsNaN(fixedX) ? 0f : fixedX;
+        });
     }
 
     private static void Pillar(GameObject root, string name, float x, float y, bool flip, Sprite sprite)
@@ -519,6 +760,8 @@ public static class WhiskerMapBuilder
         so.FindProperty("keyId").stringValue = keyId;
         so.FindProperty("keyName").stringValue = keyName;
         so.FindProperty("requiredFlag").stringValue = requiredFlag;
+        so.FindProperty("unlockClip").objectReferenceValue = LoadClip("sfx_key_unlock");
+        so.FindProperty("travelClip").objectReferenceValue = LoadClip("sfx_stairs");
         so.ApplyModifiedPropertiesWithoutUndo();
         return st;
     }
@@ -611,6 +854,7 @@ public static class WhiskerMapBuilder
         so.FindProperty("keyName").stringValue = keyName;
         so.FindProperty("isExit").boolValue = true;
         so.FindProperty("lockedMessage").stringValue = "쇠사슬로 잠겨 있다";
+        so.FindProperty("unlockClip").objectReferenceValue = LoadClip("sfx_key_unlock");
         so.ApplyModifiedPropertiesWithoutUndo();
     }
 }

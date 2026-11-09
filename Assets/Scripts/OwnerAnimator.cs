@@ -57,7 +57,7 @@ public class OwnerAnimator : MonoBehaviour
         }
         timer += Time.deltaTime;
 
-        if (owner.CurrentState == OwnerController.State.Moving)
+        if (owner.IsWalking)
             Play(walkFrames, walkFps);
         else if (owner.CurrentState == OwnerController.State.Hiding && hideFrames != null && hideFrames.Length > 0)
             Play(hideFrames, hideFps);

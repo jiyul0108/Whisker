@@ -5,11 +5,14 @@ using UnityEngine.UI;
 public static class UIKit
 {
     // 한글 폰트: HintUI의 Font 칸(Galmuri11)을 같이 씀
+    public static Font FontOverride;   // 타이틀처럼 HintUI가 없는 씬에서 쓸 폰트
+
     public static Font DefaultFont
     {
         get
         {
             if (HintUI.Instance != null && HintUI.Instance.Font != null) return HintUI.Instance.Font;
+            if (FontOverride != null) return FontOverride;
             return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         }
     }
@@ -47,7 +50,7 @@ public static class UIKit
         go.transform.SetParent(parent, false);
         var t = go.GetComponent<Text>();
         t.font = DefaultFont;
-        t.text = text;
+        LocText.Attach(t, text);   // 지금 언어로 보여주고, 언어를 바꾸면 따라 바뀜
         t.fontSize = size;
         t.color = color;
         t.alignment = align;

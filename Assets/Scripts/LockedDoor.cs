@@ -12,6 +12,8 @@ public class LockedDoor : MonoBehaviour
     [SerializeField] private string keyId = "A";
     [SerializeField] private string keyName = "녹슨 열쇠";
     [SerializeField] private bool consumeKey = true;          // 열면 열쇠가 사라짐
+    [SerializeField] private AudioClip unlockClip;            // 열쇠로 열 때 소리 (비워두면 소리 없음)
+    [SerializeField, Range(0f, 1f)] private float unlockVolume = 0.9f;
 
     [Header("범위")]
     [SerializeField] private float openRange = 0.8f;         // 문 가장자리에서 이 거리 안이면 열 수 있음
@@ -94,11 +96,12 @@ public class LockedDoor : MonoBehaviour
                 return;
             }
             if (!free && consumeKey) KeyInventory.Remove(keyId);
+            if (!free) Sfx.Play(unlockClip, unlockVolume);
             Open();
         }
         else if (HintUI.Instance != null)
         {
-            HintUI.Instance.ShowMessage($"{lockedMessage}  ({keyName} 필요)");
+            HintUI.Instance.ShowMessage(Loc.T(lockedMessage) + "  " + Loc.F("({0} 필요)", Loc.T(keyName)));
         }
     }
 
@@ -125,7 +128,7 @@ public class LockedDoor : MonoBehaviour
     {
         if (on == hinting) return;
         hinting = on;
-        string text = isExit ? "W / ↑  탈출하기" : "W / ↑  문 열기";
+        string text = isExit ? "↑  탈출하기" : "↑  문 열기";
         if (HintUI.Instance != null) HintUI.Instance.SetHint(this, on ? text : null);
     }
 

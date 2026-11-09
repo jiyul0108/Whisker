@@ -37,7 +37,7 @@ public class KeyItem : MonoBehaviour
         if (other.GetComponentInParent<CatController>() == null) return; // 고양이만 주울 수 있음
 
         KeyInventory.Add(keyId, keyName);
-        if (HintUI.Instance != null) HintUI.Instance.ShowMessage($"{keyName} 획득");
+        if (HintUI.Instance != null) HintUI.Instance.ShowItemMessage(Loc.F("{0} 획득", Loc.T(keyName)));
         Destroy(gameObject);
     }
 }

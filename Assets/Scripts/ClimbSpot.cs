@@ -61,14 +61,16 @@ public class ClimbSpot : MonoBehaviour
         if (IsClimbing)
         {
             if (IsMoving) { SetHint(null); return; }
-            SetHint("S / ↓  내려가기");
+            SetHint("↓  내려가기");
             if (kb != null && (kb.sKey.wasPressedThisFrame || kb.downArrowKey.wasPressedThisFrame)) Release();
             return;
         }
 
-        bool underClock = Mathf.Abs(cat.transform.position.x - transform.position.x) <= columnHalfWidth;
+        // 같은 층(2번 방)에서 시계 밑일 때만 (다른 층의 같은 X에서는 무시)
+        bool sameFloor = Stairs.SameFloor(cat.transform.position.y, transform.position.y);
+        bool underClock = sameFloor && Mathf.Abs(cat.transform.position.x - transform.position.x) <= columnHalfWidth;
         bool canClimb = underClock && OnChair() && ChairUnderClock();
-        SetHint(canClimb ? $"W / ↑  {climbLabel}" : null);
+        SetHint(canClimb ? $"↑  {climbLabel}" : null);
 
         if (kb == null || !(kb.wKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame)) return;
         if (canClimb) StartCoroutine(Climb());
@@ -81,7 +83,8 @@ public class ClimbSpot : MonoBehaviour
         if (chair == null || catCol == null || !cat.IsGrounded) return false;
         Bounds c = chair.bounds;
         Bounds k = catCol.bounds;
-        return k.min.y >= c.max.y - 0.15f && Mathf.Abs(k.center.x - c.center.x) <= c.extents.x + 0.1f;
+        return k.min.y >= c.max.y - 0.15f && k.min.y <= c.max.y + 0.3f   // 발이 의자 좌석 높이에 있음
+               && Mathf.Abs(k.center.x - c.center.x) <= c.extents.x + 0.1f;
     }
 
     private bool ChairUnderClock()

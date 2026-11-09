@@ -17,7 +17,7 @@ public class Stairs : MonoBehaviour
 
     [Header("연결된 계단 (다른 층의 계단 입구)")]
     [SerializeField] private Stairs linked;
-    [SerializeField] private string label = "계단 이용하기";   // 안내: "W / ↑  지하로 내려가기"
+    [SerializeField] private string label = "계단 이용하기";   // 안내: "↑  지하로 내려가기"
 
     [Header("잠금 (Key Id를 비우면 열려 있음)")]
     [SerializeField] private string keyId = "";
@@ -25,6 +25,10 @@ public class Stairs : MonoBehaviour
     [SerializeField] private bool consumeKey = true;
     [SerializeField] private GameObject lockedDoorVisual;   // 잠겨 있는 동안 보이는 문 그림 (자식, 기준점 발밑 가운데)
     [SerializeField] private Transform lockVisual;           // 문에 달린 쇠사슬·자물쇠 (문의 자식, 열 때 떨어짐)
+    [SerializeField] private AudioClip unlockClip;           // 열쇠로 열 때 소리 (비워두면 소리 없음)
+    [SerializeField, Range(0f, 1f)] private float unlockVolume = 0.9f;
+    [SerializeField] private AudioClip travelClip;           // 계단으로 이동할 때 발소리 (비워두면 소리 없음)
+    [SerializeField, Range(0f, 1f)] private float travelVolume = 0.8f;
 
     [Header("전자 잠금 (Required Flag를 넣으면 열쇠 대신 진행으로 열림. 예: POWER)")]
     [SerializeField] private string requiredFlag = "";
@@ -116,12 +120,13 @@ public class Stairs : MonoBehaviour
         {
             if (!KeyInventory.Has(keyId))
             {
-                if (HintUI.Instance != null) HintUI.Instance.ShowMessage($"잠겨 있다  ({keyName} 필요)");
+                if (HintUI.Instance != null) HintUI.Instance.ShowMessage(Loc.T("잠겨 있다") + "  " + Loc.F("({0} 필요)", Loc.T(keyName)));
                 return;
             }
             if (consumeKey) KeyInventory.Remove(keyId);
             unlocked = true;
             SetHint(false);
+            Sfx.Play(unlockClip, unlockVolume);
             if (lockedDoorVisual != null) StartCoroutine(OpenDoor());
             if (HintUI.Instance != null) HintUI.Instance.ShowMessage("문이 열렸다");
             return;            // 문만 열고, 이동은 한 번 더 눌렀을 때
@@ -134,6 +139,7 @@ public class Stairs : MonoBehaviour
     {
         IsTraveling = true;
         SetHint(false);
+        Sfx.Play(travelClip, travelVolume);
 
         // 주인이 가까이 있고 숨어 있지 않으면 함께 간다
         bool withOwner = owner != null
@@ -267,12 +273,30 @@ public class Stairs : MonoBehaviour
         return fade;
     }
 
+    // 안내 문구: 열려 있으면 주인이 함께 갈 수 있는지도 표시 (숨기처럼 "주인과 …")
+    private string hintText;
     private void SetHint(bool on)
     {
-        if (on == hinting) return;
+        string text = null;
+        if (on)
+        {
+            if (!unlocked) text = string.IsNullOrEmpty(requiredFlag) ? "문 열기" : "조사하기";
+            else text = OwnerComes() ? Loc.F("주인과 {0}", Loc.T(label)) : $"{label}  (주인은 못 따라옴)";
+            text = $"↑  {text}";
+        }
+        if (on == hinting && text == hintText) return;
         hinting = on;
-        string text = unlocked ? label : (string.IsNullOrEmpty(requiredFlag) ? "문 열기" : "조사하기");
-        if (HintUI.Instance != null) HintUI.Instance.SetHint(this, on ? $"W / ↑  {text}" : null);
+        hintText = text;
+        if (HintUI.Instance != null) HintUI.Instance.SetHint(this, text);
+    }
+
+    // 지금 계단을 타면 주인이 함께 가는가 (가까이 있고 숨어 있지 않음)
+    private bool OwnerComes()
+    {
+        return owner != null
+            && owner.CurrentState != OwnerController.State.Hiding
+            && Mathf.Abs(owner.transform.position.x - X) <= ownerRange
+            && Mathf.Abs(owner.transform.position.y - FloorY) < 2.5f;
     }
 
     // ---------- 존재(PresenceAI)용 길 찾기 ----------

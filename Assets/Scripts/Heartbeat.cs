@@ -64,7 +64,7 @@ public class Heartbeat : MonoBehaviour
     // 존재와의 거리로 정한 긴장도 (같은 층이 아니거나 너무 멀면 -1)
     private float Tension()
     {
-        if (presence == null || !presence.isActiveAndEnabled) return -1f;
+        if (presence == null || !presence.isActiveAndEnabled || !presence.IsPresent) return -1f;   // 사라져 있으면 안 들림
         Vector2 me = transform.position;
         Vector2 p = presence.transform.position;
         if (!Stairs.SameFloor(me.y, p.y)) return -1f;

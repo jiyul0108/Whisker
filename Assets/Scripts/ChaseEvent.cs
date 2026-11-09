@@ -71,6 +71,7 @@ public class ChaseEvent : MonoBehaviour
         if (dropClip != null)
             AudioSource.PlayClipAtPoint(dropClip, cam != null ? cam.transform.position : Vector3.zero, volume);
         if (cam != null) cam.Shake(0.4f, 0.1f);
+        CatVision.Reveal(tableTop + Vector2.up * 0.5f, 3.5f, 3f);   // 어두워도 떨어지는 모습이 보이게
         if (HintUI.Instance != null) HintUI.Instance.ShowMessage(dropMessage, 1.8f);
         Invoke(nameof(ShowRun), 1.8f);
 

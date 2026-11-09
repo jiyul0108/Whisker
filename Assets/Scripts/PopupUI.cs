@@ -16,6 +16,13 @@ public class PopupUI : MonoBehaviour
     [SerializeField] private Sprite bedCloseup;
     [SerializeField] private Vector2 clueAnchor = new Vector2(0.80f, 0.16f);   // 그림 안에서 단서 위치 (0~1)
 
+    [Header("금고 소리 (비워두면 소리 없음)")]
+    [SerializeField] private AudioClip safeOpenClip;   // 맞는 번호
+    [SerializeField] private AudioClip safeFailClip;   // 틀린 번호
+    [SerializeField, Range(0f, 1f)] private float safeVolume = 0.9f;
+    [SerializeField] private AudioClip paperClip;      // 문서를 볼 때
+    [SerializeField, Range(0f, 1f)] private float paperVolume = 0.8f;
+
     private enum Mode { None, Text, Bed, Keypad }
     private Mode mode = Mode.None;
     private int openFrame;
@@ -47,8 +54,9 @@ public class PopupUI : MonoBehaviour
     // ---------- 열기 ----------
     public void ShowText(string title, string body)
     {
-        textTitle.text = title;
-        textBody.text = body;
+        textTitle.text = Loc.T(title);
+        textBody.text = Loc.T(body);
+        Sfx.Play(paperClip, paperVolume);
         Open(Mode.Text);
     }
 
@@ -149,12 +157,14 @@ public class PopupUI : MonoBehaviour
         {
             var cb = onCorrect;
             onCorrect = null;
+            Sfx.Play(safeOpenClip, safeVolume);
             Close();
             cb?.Invoke();
         }
         else
         {
-            keypadMessage.text = "딸깍… 열리지 않는다";
+            keypadMessage.text = Loc.T("딸깍… 열리지 않는다");
+            Sfx.Play(safeFailClip, safeVolume);
             GameLog.Info($"금고: {typed} (틀림)");
         }
     }
@@ -185,7 +195,7 @@ public class PopupUI : MonoBehaviour
         textTitle = UIKit.Label(textPanel.transform, "", 46, TextColor, new Vector2(0.5f, 1f), new Vector2(0, -50), new Vector2(1000, 70));
         textBody = UIKit.Label(textPanel.transform, "", 34, TextColor, new Vector2(0.5f, 1f), new Vector2(0, -150), new Vector2(940, 460),
                                TextAnchor.UpperLeft);
-        UIKit.Label(textPanel.transform, "W / Esc  닫기", 26, DimColor, new Vector2(0.5f, 0f), new Vector2(0, 30), new Vector2(600, 40));
+        UIKit.Label(textPanel.transform, "↑ / Esc  닫기", 26, DimColor, new Vector2(0.5f, 0f), new Vector2(0, 30), new Vector2(600, 40));
 
         // 침대 확대
         bedPanel = UIKit.Box(root.transform, PanelColor, c, Vector2.zero, new Vector2(1240, 760), "BedPanel").gameObject;
@@ -196,7 +206,7 @@ public class PopupUI : MonoBehaviour
         clueBand.rectTransform.localRotation = Quaternion.Euler(0, 0, -4f);
         clueNumber = UIKit.Label(bedImage.transform, "", 30, new Color(0.15f, 0.12f, 0.1f, 0.9f), clueAnchor, new Vector2(0, -34),
                                  new Vector2(80, 40), TextAnchor.MiddleCenter, "ClueNumber");
-        UIKit.Label(bedPanel.transform, "W / Esc  닫기", 26, DimColor, new Vector2(0.5f, 0f), new Vector2(0, 26), new Vector2(600, 40));
+        UIKit.Label(bedPanel.transform, "↑ / Esc  닫기", 26, DimColor, new Vector2(0.5f, 0f), new Vector2(0, 26), new Vector2(600, 40));
 
         // 금고
         keypadPanel = UIKit.Box(root.transform, PanelColor, c, Vector2.zero, new Vector2(820, 560), "KeypadPanel").gameObject;
@@ -208,7 +218,7 @@ public class PopupUI : MonoBehaviour
             digitTexts[i] = UIKit.Label(digitBoxes[i].transform, "0", 90, TextColor, c, Vector2.zero, new Vector2(120, 150));
         }
         keypadMessage = UIKit.Label(keypadPanel.transform, "", 30, new Color(0.9f, 0.45f, 0.4f), c, new Vector2(0, -110), new Vector2(700, 50));
-        UIKit.Label(keypadPanel.transform, "A/D 자리 이동   W/S 숫자 바꾸기   Enter 확인   Esc 닫기", 24, DimColor,
+        UIKit.Label(keypadPanel.transform, "← → 자리 이동   ↑ ↓ 숫자 바꾸기   숫자 키 입력   Enter 확인   Esc 닫기", 24, DimColor,
                     new Vector2(0.5f, 0f), new Vector2(0, 30), new Vector2(780, 40));
 
         root.SetActive(false);

@@ -14,12 +14,19 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float freezeTime = 0.6f;      // 잡힌 순간을 멈춰서 보여주는 시간
     [SerializeField] private float fadeTime = 1.0f;        // 화면이 까매지는 시간
     [SerializeField] private float autoRestartDelay = 0f;  // 0이면 R 키를 눌러야 재시작
-    [SerializeField] private string caughtText = "CAUGHT";
-    [SerializeField] private string restartText = "Press R to restart";
+    [SerializeField] private string caughtTitle = "잡혔다…";
+    [SerializeField] private string caughtHint = "R  처음부터 다시 시작";
+    [SerializeField] private AudioClip caughtClip;          // 잡혔을 때 소리 (비워두면 소리 없음)
+    [SerializeField, Range(0f, 1f)] private float caughtVolume = 1f;
 
     [Header("탈출 성공 연출")]
-    [SerializeField] private string clearText = "ESCAPED";
-    [SerializeField] private string clearSubText = "Press R to play again";
+    [SerializeField] private string clearTitle = "탈출 성공";
+    [SerializeField] private string clearHint = "주인과 함께 폐병원을 빠져나왔다\n\nR  다시 하기";
+    [SerializeField] private AudioClip clearClip;           // 탈출했을 때 소리 (비워두면 소리 없음)
+    [SerializeField, Range(0f, 1f)] private float clearVolume = 1f;
+
+    [Header("글꼴 (비워두면 안내 문구와 같은 Galmuri)")]
+    [SerializeField] private Font font;
 
     public bool IsGameOver { get; private set; }   // 게임이 끝났는가 (잡힘 또는 탈출)
     public bool IsCleared { get; private set; }    // 탈출에 성공했는가
@@ -38,6 +45,14 @@ public class GameManager : MonoBehaviour
         BuildUI();
     }
 
+    void Start()
+    {
+        // 한글이 깨지지 않게 Galmuri (HintUI가 준비된 뒤에 적용)
+        Font f = font != null ? font : UIKit.DefaultFont;
+        titleText.font = f;
+        subText.font = f;
+    }
+
     void OnDestroy()
     {
         if (Instance == this) Instance = null;
@@ -48,10 +63,11 @@ public class GameManager : MonoBehaviour
     {
         if (IsGameOver) return;
         IsGameOver = true;
+        Sfx.Play(caughtClip, caughtVolume);
         GameLog.Info($"게임오버: {reason}");
-        titleText.text = caughtText;
+        titleText.text = Loc.T(caughtTitle);
         titleText.color = new Color(0.75f, 0.05f, 0.05f);
-        subText.text = restartText;
+        subText.text = Loc.T(caughtHint);
         StartCoroutine(EndRoutine(freezeTime));
     }
 
@@ -61,11 +77,12 @@ public class GameManager : MonoBehaviour
         if (IsGameOver) return;
         IsGameOver = true;
         IsCleared = true;
+        Sfx.Play(clearClip, clearVolume);
         float t = Time.time - startTime;
         GameLog.Info($"탈출 성공! 플레이 시간 {t:0}초");
-        titleText.text = clearText;
+        titleText.text = Loc.T(clearTitle);
         titleText.color = new Color(0.85f, 0.8f, 0.6f);
-        subText.text = $"Time  {(int)t / 60:00}:{(int)t % 60:00}\n\n{clearSubText}";
+        subText.text = Loc.F("플레이 시간  {0}", $"{(int)t / 60:00}:{(int)t % 60:00}") + "\n\n" + Loc.T(clearHint);
         StartCoroutine(EndRoutine(0.3f));
     }
 
@@ -136,9 +153,9 @@ public class GameManager : MonoBehaviour
         Stretch(fadeImage.rectTransform);
         SetFade(0f);
 
-        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        titleText = CreateText(canvasGO.transform, font, caughtText, 120, new Color(0.75f, 0.05f, 0.05f), 60f);
-        subText = CreateText(canvasGO.transform, font, restartText, 40, new Color(0.8f, 0.8f, 0.8f), -110f);
+        Font f = font != null ? font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");   // Start에서 Galmuri로 바뀜
+        titleText = CreateText(canvasGO.transform, f, caughtTitle, 120, new Color(0.75f, 0.05f, 0.05f), 80f);
+        subText = CreateText(canvasGO.transform, f, caughtHint, 40, new Color(0.8f, 0.8f, 0.8f), -110f);
         titleText.enabled = false;
         subText.enabled = false;
     }
@@ -155,6 +172,8 @@ public class GameManager : MonoBehaviour
         text.alignment = TextAnchor.MiddleCenter;
         text.raycastTarget = false;
         text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        text.verticalOverflow = VerticalWrapMode.Overflow;   // 여러 줄이어도 잘리지 않게
+        text.lineSpacing = 1.2f;
         var rt = text.rectTransform;
         rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.sizeDelta = new Vector2(1600, 200);

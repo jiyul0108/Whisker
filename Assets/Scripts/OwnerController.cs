@@ -1,6 +1,6 @@
 using UnityEngine;
 
-// 주인: 고양이가 울면 운 자리까지 걸어오고, 걷는 중에 한 번 더 울면 멈춘다
+// 주인: 고양이가 울면(E) 고양이 자리까지 걸어오고, 걷는 중에 한 번 더 울면 멈춘다 (도착하면 멈춤 → 다시 부르려면 또 울어야 함)
 // 벽에 막히거나 앞에 바닥이 없으면(낭떠러지) 스스로 멈춘다
 [RequireComponent(typeof(Rigidbody2D))]
 public class OwnerController : MonoBehaviour
@@ -10,6 +10,8 @@ public class OwnerController : MonoBehaviour
     [Header("이동")]
     [SerializeField] private float moveSpeed = 2f;
     [SerializeField] private float arriveDistance = 0.3f;  // 고양이 자리와 이만큼 가까워지면 도착
+    [SerializeField] private float runSpeed = 3.6f;        // 존재가 쫓아올 때 고양이를 따라 뛰는 속도 (존재 추격 3보다 빠르게)
+    [SerializeField, Range(0.1f, 1f)] private float minFearSpeed = 0.7f;  // 공포도가 높아도 이보다 느려지지 않음
 
     [Header("장애물 감지")]
     [SerializeField] private LayerMask groundLayer;        // Ground
@@ -23,6 +25,7 @@ public class OwnerController : MonoBehaviour
     [SerializeField] private Color hidingColor = new Color(0.6f, 0.6f, 0.6f);
 
     public State CurrentState { get; private set; } = State.Waiting;
+    public bool IsWalking { get; private set; }                 // 지금 실제로 걷고 있는가 (애니메이션용)
 
     private Rigidbody2D rb;
     private Collider2D col;
@@ -30,6 +33,7 @@ public class OwnerController : MonoBehaviour
     private float targetX;
     private Transform followTarget;   // 따라갈 고양이 (운 뒤 고양이가 움직여도 따라감)
     private OwnerFear fear;           // 공포도가 높을수록 느려짐 (없으면 평소 속도)
+    private PresenceAI presence;      // 쫓기고 있는지 확인용
 
     void Awake()
     {
@@ -38,6 +42,7 @@ public class OwnerController : MonoBehaviour
         sr = GetComponentInChildren<SpriteRenderer>(); // 자식 Visual의 그림
         fear = GetComponent<OwnerFear>();
         if (groundLayer.value == 0) groundLayer = LayerMask.GetMask("Ground");
+        presence = FindAnyObjectByType<PresenceAI>();
         ApplyColor();
     }
 
@@ -59,7 +64,7 @@ public class OwnerController : MonoBehaviour
     }
 
     // 숨기 / 나오기 (HideController가 호출)
-    public void Hide() { SetState(State.Hiding); }
+    public void Hide() { IsWalking = false; SetState(State.Hiding); }
     public void Unhide() { if (CurrentState == State.Hiding) SetState(State.Waiting); }
 
     // 계단으로 고양이와 함께 다른 층으로 (Stairs가 호출)
@@ -68,18 +73,20 @@ public class OwnerController : MonoBehaviour
         rb.position = pos;
         transform.position = pos;
         rb.linearVelocity = Vector2.zero;
+        IsWalking = false;
         SetState(State.Waiting);
     }
 
     void FixedUpdate()
     {
-        if (CurrentState != State.Moving) return;
+        if (CurrentState != State.Moving) { IsWalking = false; return; }
 
         Vector2 pos = rb.position;
         // 고양이가 다른 층으로 가버리면 멈춤 (계단을 혼자 탄 경우)
         if (followTarget != null && Mathf.Abs(followTarget.position.y - pos.y) > 5f)
         {
             SetState(State.Waiting);
+            IsWalking = false;
             return;
         }
         if (followTarget != null) targetX = followTarget.position.x; // 고양이의 지금 위치를 계속 따라감
@@ -90,14 +97,19 @@ public class OwnerController : MonoBehaviour
         {
             GameLog.Info("주인: 앞이 막혀서 멈춤");
             SetState(State.Waiting);
+            IsWalking = false;
             return;
         }
+        IsWalking = true;
 
-        float speed = moveSpeed * (fear != null ? fear.SpeedMultiplier : 1f);
+        // 쫓기는 중이면 고양이를 따라 뛰고(공포도 무시), 평소에는 공포도만큼 느려짐 (최소 Min Fear Speed)
+        bool chased = presence != null && presence.isActiveAndEnabled && presence.IsHunting;
+        float speed = chased ? runSpeed
+                             : moveSpeed * Mathf.Max(minFearSpeed, fear != null ? fear.SpeedMultiplier : 1f);
         float newX = Mathf.MoveTowards(pos.x, targetX, speed * Time.fixedDeltaTime);
         rb.MovePosition(new Vector2(newX, pos.y));
 
-        if (Mathf.Abs(targetX - newX) <= arriveDistance) SetState(State.Waiting);
+        if (Mathf.Abs(targetX - newX) <= arriveDistance) { SetState(State.Waiting); IsWalking = false; }
     }
 
     // 벽에 막혔거나 앞에 바닥이 없는가

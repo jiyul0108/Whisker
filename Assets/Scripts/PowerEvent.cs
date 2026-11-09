@@ -81,6 +81,7 @@ public class PowerEvent : MonoBehaviour
 
         yield return ScreenFade.Fade(0f, 1f, 0.4f);
         if (cam != null && doorStairs != null) cam.ShowPoint(doorStairs.transform.position);
+        if (doorStairs != null) CatVision.Reveal(doorStairs.transform.position + Vector3.up * 1.3f, 3.5f, 4.2f);   // 어두워도 문이 보이게
         yield return null;
         yield return ScreenFade.Fade(1f, 0f, 0.4f);
         yield return new WaitForSeconds(0.4f);

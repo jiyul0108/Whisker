@@ -15,11 +15,19 @@ public class OwnerFear : MonoBehaviour
 
     [Header("내려가는 조건")]
     [SerializeField] private float calmFall = 8f;        // 고양이 곁 + 밝은 방이면 초당
+    [SerializeField, Range(0f, 1f)] private float darkCalmFactor = 0.4f;   // 어두운 방이어도 고양이 곁이면 이만큼(비율) 천천히 내려감
     [SerializeField] private float meowCalm = 10f;       // 고양이가 울어 주면 한 번에
 
     [Header("느려지기")]
     [SerializeField, Range(0.1f, 1f)] private float slowestSpeed = 0.4f;  // 공포도 100일 때 속도 배율
     [SerializeField] private float slowStart = 30f;      // 공포도가 이보다 높아지면 느려지기 시작
+
+    [Header("비명 (공포도가 가득 차면 → 존재가 소리를 듣고 찾아옴)")]
+    [SerializeField] private AudioClip screamClip;            // 비워두면 소리 없이 메시지만
+    [SerializeField, Range(0f, 1f)] private float screamVolume = 1f;
+    [SerializeField] private float afterScream = 70f;         // 비명을 지른 뒤 공포도 (조금 진정)
+    [SerializeField] private float screamCooldown = 20f;      // 이 시간 안에는 다시 지르지 않음
+    [SerializeField] private string screamMessage = "주인이 비명을 질렀다! 무언가 소리를 듣고 온다…";
 
     [Header("표시")]
     [SerializeField] private bool showBar = true;
@@ -31,7 +39,9 @@ public class OwnerFear : MonoBehaviour
     private OwnerController owner;
     private OwnerAnimator anim;
     private Image fill;
+    private float lastScream = -999f;
     private Text label;
+    private bool started;   // 고양이가 처음 울어서(E) 주인이 들을 때까지는 공포도가 오르지 않음
 
     void Awake()
     {
@@ -45,15 +55,29 @@ public class OwnerFear : MonoBehaviour
         if (showBar) BuildUI();
     }
 
+    // 공포도가 가득 참 → 비명 → 존재가 그 자리로 찾아옴
+    private void Scream()
+    {
+        lastScream = Time.time;
+        Fear = afterScream;
+        Sfx.Play(screamClip, screamVolume);
+        if (HintUI.Instance != null) HintUI.Instance.ShowMessage(screamMessage, 2.5f);
+        var presence = FindAnyObjectByType<PresenceAI>();
+        if (presence != null) presence.HearNoise(transform.position);
+        GameLog.Info("주인: 비명");
+    }
+
     // 고양이가 울었을 때 CatMeow가 호출
     public void Calm()
     {
+        started = true;
         Fear = Mathf.Max(0f, Fear - meowCalm);
     }
 
     void Update()
     {
         if (cat == null || Time.timeScale == 0f) return;
+        if (!started) { UpdateUI(); return; }   // 처음 E로 주인을 부르기 전까지는 0에 멈춰 있음
 
         Vector2 me = transform.position;
         Vector2 c = cat.transform.position;
@@ -62,11 +86,12 @@ public class OwnerFear : MonoBehaviour
         Room room = Room.Find(me);
         bool dark = room != null && room.IsDarkNow;
 
-        float delta = 0f;
-        if (far) delta += farRise;
-        if (dark) delta += darkRise;
-        if (!far && !dark) delta -= calmFall;
+        // 고양이와 멀면 오르고(어두우면 더), 고양이 곁이면 내려감(어두우면 천천히)
+        float delta;
+        if (far) delta = farRise + (dark ? darkRise : 0f);
+        else delta = -calmFall * (dark ? darkCalmFactor : 1f);
         Fear = Mathf.Clamp(Fear + delta * Time.deltaTime, 0f, 100f);
+        if (Fear >= 100f && Time.time - lastScream > screamCooldown) Scream();
 
         // 공포도 → 속도 (Slow Start까지는 평소 속도)
         float k = Mathf.InverseLerp(slowStart, 100f, Fear);
@@ -104,6 +129,6 @@ public class OwnerFear : MonoBehaviour
         fill.fillAmount = f;
         // 노랑 → 주황 → 빨강
         fill.color = Color.Lerp(new Color(0.85f, 0.75f, 0.3f), new Color(0.8f, 0.1f, 0.08f), f);
-        label.text = Fear >= 70f ? "주인 공포도  (몸이 굳는다…)" : "주인 공포도";
+        label.text = Loc.T(Fear >= 70f ? "주인 공포도  (몸이 굳는다…)" : "주인 공포도");
     }
 }

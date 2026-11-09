@@ -9,6 +9,11 @@ public class CatMeow : MonoBehaviour
     [SerializeField] private float hearRadius = 10f;   // 주인이 울음소리를 들을 수 있는 거리
     [SerializeField] private float cooldown = 0.5f;
 
+    [Header("울음소리 (여러 개를 넣으면 무작위로, 비워두면 소리 없음)")]
+    [SerializeField] private AudioClip[] meowClips;
+    [SerializeField, Range(0f, 1f)] private float volume = 0.8f;
+    [SerializeField] private float pitchRandom = 0.06f;   // 매번 조금씩 다른 높이로
+
     private CatAnimator anim;
     private float lastMeowTime = -999f;
 
@@ -33,6 +38,8 @@ public class CatMeow : MonoBehaviour
     {
         lastMeowTime = Time.time;
         if (anim != null) anim.PlayMeow();
+        if (meowClips != null && meowClips.Length > 0)
+            Sfx.Play(meowClips[Random.Range(0, meowClips.Length)], volume, 1f + Random.Range(-pitchRandom, pitchRandom));
         if (owner == null) return;
 
         float dist = Vector2.Distance(transform.position, owner.transform.position);

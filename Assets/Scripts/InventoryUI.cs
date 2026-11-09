@@ -4,17 +4,25 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 // 오른쪽 위: 가진 아이템 그림을 한 줄로 표시
-// Tab: 인벤토리 창 열기/닫기 (아이템 그림 · 이름 · 짧은 설명). 열려 있는 동안 게임이 멈춤
+// Tab: 인벤토리 창 열기. ← → 로 설정창(PauseMenu)과 오감. 닫기는 Tab으로만 (Esc로는 안 닫힘)
+// (웹 전체 화면에서는 Esc를 브라우저가 가져가므로 Tab만으로도 설정을 열고 닫을 수 있게)
+// 인벤토리 창: 아이템 그림 · 이름 · 짧은 설명. 열려 있는 동안 게임이 멈춤
 public class InventoryUI : MonoBehaviour
 {
     public static InventoryUI Instance { get; private set; }
 
     [SerializeField] private float slotSize = 72f;
 
+    [Header("아이템을 얻었을 때 소리 (비워두면 소리 없음)")]
+    [SerializeField] private AudioClip pickupClip;
+    [SerializeField, Range(0f, 1f)] private float pickupVolume = 0.8f;
+    private int shownCount = -1;   // 지난번에 보여준 아이템 수 (늘어나면 소리)
+
     private RectTransform bar;          // 오른쪽 위 줄
     private GameObject panel;           // Tab 창
     private RectTransform list;
     private Text emptyText;
+    private Text titleText;   // "인벤토리 | 설정" (지금 쪽 = 인벤토리가 노랑)
     private int shownVersion = -1;
     private bool open;
     private int openFrame;
@@ -27,6 +35,20 @@ public class InventoryUI : MonoBehaviour
 
     void Awake() { Instance = this; }
     void OnDestroy() { if (Instance == this) Instance = null; }
+    void OnEnable() => Loc.Changed += RefreshTitle;
+    void OnDisable() => Loc.Changed -= RefreshTitle;
+
+    // 설정창에서 ← → 로 돌아올 때
+    public void OpenFromSettings()
+    {
+        if (!open) SetOpen(true);
+    }
+
+    private void RefreshTitle()
+    {
+        if (titleText == null) return;
+        titleText.text = $"<color=#FFD95A>{Loc.T("인벤토리")}</color>      <color=#7A7A7A>{Loc.T("설정")}</color>  <color=#FFD95A>▶</color>";
+    }
 
     void Start()
     {
@@ -44,7 +66,12 @@ public class InventoryUI : MonoBehaviour
         if (open)
         {
             if (Time.frameCount == openFrame) return;
-            if (kb.tabKey.wasPressedThisFrame || kb.escapeKey.wasPressedThisFrame) SetOpen(false);
+            if (kb.tabKey.wasPressedThisFrame) SetOpen(false);
+            else if (kb.leftArrowKey.wasPressedThisFrame || kb.rightArrowKey.wasPressedThisFrame)
+            {
+                SetOpen(false);
+                if (PauseMenu.Instance != null) PauseMenu.Instance.OpenFromInventory();   // 옆 쪽: 설정
+            }
             return;
         }
 
@@ -70,6 +97,8 @@ public class InventoryUI : MonoBehaviour
         rows.Clear();
 
         var ids = KeyInventory.Ids;
+        if (shownCount >= 0 && ids.Count > shownCount) Sfx.Play(pickupClip, pickupVolume);
+        shownCount = ids.Count;
         for (int i = 0; i < ids.Count; i++)
         {
             string id = ids[i];
@@ -112,7 +141,7 @@ public class InventoryUI : MonoBehaviour
         barGO.transform.SetParent(canvas.transform, false);
         bar = barGO.GetComponent<RectTransform>();
         UIKit.Place(bar, new Vector2(1f, 1f), new Vector2(-30f, -30f), new Vector2(slotSize, slotSize));
-        UIKit.Label(canvas.transform, "Tab  인벤토리", 22, new Color(0.7f, 0.7f, 0.7f), new Vector2(1f, 1f),
+        UIKit.Label(canvas.transform, "Tab  인벤토리 · 설정", 22, new Color(0.7f, 0.7f, 0.7f), new Vector2(1f, 1f),
                     new Vector2(-30f, -30f - slotSize - 6f), new Vector2(300, 30), TextAnchor.UpperRight);
 
         // Tab 창
@@ -121,7 +150,8 @@ public class InventoryUI : MonoBehaviour
         panel = dim.gameObject;
         var box = UIKit.Box(panel.transform, new Color(0.06f, 0.06f, 0.07f, 0.96f), new Vector2(0.5f, 0.5f), Vector2.zero,
                             new Vector2(1100, 860), "Panel");
-        UIKit.Label(box.transform, "인벤토리", 46, TextColor, new Vector2(0.5f, 1f), new Vector2(0, -36), new Vector2(600, 70));
+        titleText = UIKit.Label(box.transform, "", 46, TextColor, new Vector2(0.5f, 1f), new Vector2(0, -36), new Vector2(900, 70));
+        RefreshTitle();
 
         var listGO = new GameObject("List", typeof(RectTransform));
         listGO.transform.SetParent(box.transform, false);
@@ -130,7 +160,7 @@ public class InventoryUI : MonoBehaviour
 
         emptyText = UIKit.Label(box.transform, "가진 아이템이 없다", 32, new Color(0.6f, 0.6f, 0.6f), new Vector2(0.5f, 0.5f),
                                 Vector2.zero, new Vector2(600, 60));
-        UIKit.Label(box.transform, "Tab / Esc  닫기", 26, new Color(0.6f, 0.6f, 0.6f), new Vector2(0.5f, 0f),
+        UIKit.Label(box.transform, "← →  설정    Tab  닫기", 26, new Color(0.6f, 0.6f, 0.6f), new Vector2(0.5f, 0f),
                     new Vector2(0, 26), new Vector2(600, 40));
         panel.SetActive(false);
     }

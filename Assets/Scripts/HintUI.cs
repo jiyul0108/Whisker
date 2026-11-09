@@ -34,6 +34,9 @@ public class HintUI : MonoBehaviour
         BuildUI();
     }
 
+    void OnEnable() => Loc.Changed += RefreshHint;
+    void OnDisable() => Loc.Changed -= RefreshHint;
+
     void OnDestroy()
     {
         if (Instance == this) Instance = null;
@@ -47,23 +50,40 @@ public class HintUI : MonoBehaviour
     {
         if (string.IsNullOrEmpty(text)) hints.Remove(source);
         else hints[source] = text;
+        RefreshHint();
+    }
 
+    private void RefreshHint()
+    {
         if (hint == null) return; // 씬을 닫는 중
-        string joined = string.Join("      ", hints.Values);
+        var list = new List<string>();
+        foreach (var h in hints.Values) list.Add(Loc.T(h));
+        string joined = string.Join("      ", list);
         hint.enabled = joined.Length > 0;
         hint.text = joined;
     }
 
-    // 잠깐 보여주고 사라지는 메시지
+    [Header("노란 메시지")]
+    [SerializeField] private bool itemMessagesOnly = true;   // 켜면 아이템을 얻었을 때만 노란 메시지 (힌트성 메시지는 숨김)
+
+    // 아이템을 얻었을 때의 메시지 (항상 보임)
+    public void ShowItemMessage(string text, float seconds = 2f)
+    {
+        if (messageRoutine != null) StopCoroutine(messageRoutine);
+        messageRoutine = StartCoroutine(MessageRoutine(text, seconds));
+    }
+
+    // 잠깐 보여주고 사라지는 메시지 (Item Messages Only가 켜져 있으면 보이지 않음)
     public void ShowMessage(string text, float seconds = 1.5f)
     {
+        if (itemMessagesOnly) return;
         if (messageRoutine != null) StopCoroutine(messageRoutine);
         messageRoutine = StartCoroutine(MessageRoutine(text, seconds));
     }
 
     private IEnumerator MessageRoutine(string text, float seconds)
     {
-        message.text = text;
+        message.text = Loc.T(text);
         message.enabled = true;
         yield return new WaitForSecondsRealtime(seconds);
         message.enabled = false;

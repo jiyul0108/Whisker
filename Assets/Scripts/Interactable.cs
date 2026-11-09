@@ -17,7 +17,9 @@ public class Interactable : MonoBehaviour
 
     [Header("안내")]
     [SerializeField] private string label = "조사하기";
+    [SerializeField] private string readyLabel = "";          // 조건(진행·아이템)을 다 채웠을 때의 안내 (예: 열쇠 조각 붙이기). 비우면 Label
     [SerializeField] private bool requireClimbing = false;      // 켜면 벽을 타고 있을 때만 (높은 곳의 시계)
+    [SerializeField] private bool alwaysShowMessages = false;   // 켜면 이 물건의 문구는 모두 노란 메시지로 보여줌 (두꺼비집)
 
     [Header("조건: 진행")]
     [SerializeField] private string requiredFlag = "";
@@ -112,11 +114,11 @@ public class Interactable : MonoBehaviour
 
         var missing = new List<string>();
         foreach (var id in requiredItems)
-            if (!string.IsNullOrEmpty(id) && !KeyInventory.Has(id)) missing.Add(ItemDB.Name(id));
+            if (!string.IsNullOrEmpty(id) && !KeyInventory.Has(id)) missing.Add(Loc.T(ItemDB.Name(id)));
         if (missing.Count > 0)
         {
             string text = missingMessage;
-            if (listMissing) text = (string.IsNullOrEmpty(text) ? "" : text + "  ") + $"(필요: {string.Join(", ", missing)})";
+            if (listMissing) text = (string.IsNullOrEmpty(text) ? "" : text + "  ") + Loc.F("(필요: {0})", string.Join(", ", missing));
             Message(text);
             GameFlags.Set(missingSetsFlag);
             return;
@@ -159,8 +161,13 @@ public class Interactable : MonoBehaviour
         GameFlags.Set(setFlag);
 
         string text = successMessage;
-        if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(rewardItem)) text = $"{ItemDB.Name(rewardItem)} 획득";
-        Message(text);
+        if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(rewardItem)) text = Loc.F("{0} 획득", Loc.T(ItemDB.Name(rewardItem)));
+        // 아이템을 얻는 조사만 노란 메시지 (나머지는 HintUI 설정에 따라 숨김)
+        if (!string.IsNullOrEmpty(rewardItem) || revealObject != null)
+        {
+            if (!string.IsNullOrEmpty(text) && HintUI.Instance != null) HintUI.Instance.ShowItemMessage(text, 2.2f);
+        }
+        else Message(text);
 
         if (oneShot && !Repeatable) done = true;
         SetHint(false);    // 안내 문구를 지웠다가 다음 프레임에 다시 계산
@@ -180,9 +187,11 @@ public class Interactable : MonoBehaviour
         t.position = from;
         revealObject.SetActive(true);
 
+        // 떨어지는 도중에 고양이가 주워서(Destroy) 사라지면 멈춤
         float v = 0f, y = from.y;
         while (y > to.y)
         {
+            if (t == null) yield break;
             v += 12f * Time.deltaTime;
             y -= v * Time.deltaTime;
             t.position = new Vector3(to.x, Mathf.Max(y, to.y), to.z);
@@ -192,23 +201,38 @@ public class Interactable : MonoBehaviour
         float b = 0f;
         while (b < 0.18f)
         {
+            if (t == null) yield break;
             b += Time.deltaTime;
             t.position = to + Vector3.up * (Mathf.Sin(b / 0.18f * Mathf.PI) * 0.12f);
             yield return null;
         }
-        t.position = to;
+        if (t != null) t.position = to;
     }
 
-    private static void Message(string text)
+    private void Message(string text)
     {
-        if (!string.IsNullOrEmpty(text) && HintUI.Instance != null) HintUI.Instance.ShowMessage(text, 2.2f);
+        if (string.IsNullOrEmpty(text) || HintUI.Instance == null) return;
+        if (alwaysShowMessages) HintUI.Instance.ShowItemMessage(text, 2.2f);
+        else HintUI.Instance.ShowMessage(text, 2.2f);
     }
 
+    private string hintText;
     private void SetHint(bool on)
     {
-        if (on == hinting) return;
+        string text = on ? $"↑  {(Ready() && !done && !string.IsNullOrEmpty(readyLabel) ? readyLabel : label)}" : null;
+        if (on == hinting && text == hintText) return;
         hinting = on;
-        if (HintUI.Instance != null) HintUI.Instance.SetHint(this, on ? $"W / ↑  {label}" : null);
+        hintText = text;
+        if (HintUI.Instance != null) HintUI.Instance.SetHint(this, text);
+    }
+
+    // 진행 표시와 필요한 아이템을 다 갖췄는가
+    private bool Ready()
+    {
+        if (!string.IsNullOrEmpty(requiredFlag) && !GameFlags.Has(requiredFlag)) return false;
+        foreach (var id in requiredItems)
+            if (!string.IsNullOrEmpty(id) && !KeyInventory.Has(id)) return false;
+        return true;
     }
 
     void OnDrawGizmos()

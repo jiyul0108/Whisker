@@ -42,8 +42,9 @@ public class CatController : MonoBehaviour
         if (ClimbSpot.IsClimbing) { jumpPressed = false; return; }    // 벽에 붙어 있는 중
         if (GameInput.Blocked) { jumpPressed = false; return; }       // 팝업·연출 중
 
-        if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) moveInput -= 1f;
-        if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) moveInput += 1f;
+        // 이동은 방향키(← →)만. W·A·S·D는 상호작용 전용 (W 조사, S 숨기)
+        if (kb.leftArrowKey.isPressed) moveInput -= 1f;
+        if (kb.rightArrowKey.isPressed) moveInput += 1f;
 
         if (kb.spaceKey.wasPressedThisFrame) jumpPressed = true;
 

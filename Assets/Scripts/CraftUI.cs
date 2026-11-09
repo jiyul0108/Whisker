@@ -51,7 +51,7 @@ public class CraftUI : MonoBehaviour
     {
         IsCrafting = true;
         GameInput.SetCutscene(true);
-        titleText.text = title;
+        titleText.text = Loc.T(title);
         SetProgress(0f);
         root.SetActive(true);
         if (loopClip != null) { source.clip = loopClip; source.volume = volume; source.loop = true; source.Play(); }
@@ -102,10 +102,11 @@ public class CraftUI : MonoBehaviour
         root = canvas.gameObject;
 
         Vector2 bottom = new Vector2(0.5f, 0f);
-        var panel = UIKit.Box(root.transform, new Color(0.05f, 0.05f, 0.06f, 0.85f), bottom, new Vector2(0, 150), new Vector2(720, 150), "CraftPanel");
+        var panel = UIKit.Box(root.transform, new Color(0.05f, 0.05f, 0.06f, 0.85f), bottom, new Vector2(0, 150), new Vector2(980, 150), "CraftPanel");   // 영어 문구도 한 줄에 들어가게 넓게
         Vector2 c = new Vector2(0.5f, 0.5f);
 
-        titleText = UIKit.Label(panel.transform, "", 32, new Color(0.88f, 0.85f, 0.78f), new Vector2(0.5f, 1f), new Vector2(0, -14), new Vector2(680, 44));
+        titleText = UIKit.Label(panel.transform, "", 32, new Color(0.88f, 0.85f, 0.78f), new Vector2(0.5f, 1f), new Vector2(0, -14), new Vector2(940, 44));
+        titleText.horizontalOverflow = HorizontalWrapMode.Overflow;   // 길어도 두 줄로 잘리지 않게
 
         var bg = UIKit.Box(panel.transform, new Color(0.18f, 0.18f, 0.2f), c, new Vector2(0, -6), new Vector2(BarWidth + 8, 36), "BarBG");
         fill = UIKit.Box(bg.transform, new Color(0.85f, 0.55f, 0.2f), new Vector2(0f, 0.5f), new Vector2(4, 0), new Vector2(0, 28), "BarFill");
