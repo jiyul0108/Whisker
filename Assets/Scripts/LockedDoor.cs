@@ -18,6 +18,7 @@ public class LockedDoor : MonoBehaviour
     [Header("범위")]
     [SerializeField] private float openRange = 0.8f;         // 문 가장자리에서 이 거리 안이면 열 수 있음
     [SerializeField] private float blockHeight = 6f;         // 막는 높이 (점프로 넘지 못하게 높게)
+    [SerializeField] private bool solid = true;              // 끄면 지나갈 수 있는 문 (그림·판정만, 탈출문)
 
     [Header("문구")]
     [SerializeField] private string lockedMessage = "잠겨 있다";
@@ -42,12 +43,13 @@ public class LockedDoor : MonoBehaviour
     void Awake()
     {
         col = GetComponent<BoxCollider2D>();
-        col.isTrigger = false;
+        col.isTrigger = !solid;
         sr = GetComponentInChildren<SpriteRenderer>();
 
-        // 주인은 Ground 레이어를 벽으로 보고 멈춘다
+        // 주인은 Ground 레이어를 벽으로 보고 멈춘다 (지나갈 수 있는 문은 기본 레이어)
         int ground = LayerMask.NameToLayer("Ground");
-        if (ground >= 0) gameObject.layer = ground;
+        if (solid && ground >= 0) gameObject.layer = ground;
+        else if (!solid) gameObject.layer = 0;
 
         // 충돌 범위: 문 그림 폭 × 막는 높이 (발밑 기준)
         float w = (sr != null && sr.sprite != null) ? sr.sprite.bounds.size.x : col.size.x;

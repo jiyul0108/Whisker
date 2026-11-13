@@ -137,6 +137,7 @@ public class TitleScreen : MonoBehaviour
             if (source != null) source.volume = v0 * (1f - t);
             yield return null;
         }
+        GameManager.ResetRun();   // 새 판: 플레이 시간·잡힌 횟수를 처음부터
         SceneManager.LoadScene(gameScene);
     }
 

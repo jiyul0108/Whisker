@@ -61,7 +61,7 @@ public class PresenceAI : MonoBehaviour
     [SerializeField] private string[] safeRoomNames = { "1번 방" }; // 존재가 절대 들어가지 않는 방 (Room의 Room Name)
     // 갑자기 나타나지는 않지만, 쫓아서 들어오거나 숨은 곳을 찾아 들어올 수는 있는 방
     [SerializeField] private string[] noAppearRoomNames = { "2번 방" };
-    // 연출만 있는 방 (지하): 갑자기 나타나거나 쫓아오거나 찾아오지 않음. 깜짝 등장·전원 이벤트만
+    // 지하: 갑자기 나타나지는 않음 (깜짝 등장·전원 이벤트만). 대신 쫓아오거나 숨은 곳을 찾아 내려올 수는 있음
     [SerializeField] private string[] eventOnlyRoomNames = { "6번 방", "7번 방" };
     [SerializeField] private float roamMargin = 1f;      // 방 끝에서 이만큼 떨어진 곳까지만 목적지로 고름
     [SerializeField, Range(0f, 1f)] private float stayInRoomChance = 0.4f; // 같은 방 안에서 다른 곳으로 갈 확률
@@ -70,7 +70,12 @@ public class PresenceAI : MonoBehaviour
 
     [Header("숨는 걸 들킴 (존재가 보는 앞에서 숨으면 숨을 곳까지 쫓아와 잡음)")]
     [SerializeField] private float seeHideRange = 7f;    // 이 거리 안에서, 존재가 바라보는 쪽에서 숨으면 들킴
-    [SerializeField] private string exposedMessage = "들켰다…!";
+    [SerializeField] private float calmSeeRange = 3f;    // 아직 고양이를 발견하지 않은 존재는 이 거리 안에서 숨어야만 알아챔
+    [SerializeField] private string exposedMessage = "숨는 걸 들켰다…!";
+
+    [Header("숨은 곳 들추기 (숨는 걸 들킨 채 잡히면 상자·책상을 들춰서 끌어냄)")]
+    [SerializeField] private Sprite[] liftFrames;        // 들추는 그림 (presence_lift_01~). 비워두면 서 있는 그림을 기울여서 표현
+    [SerializeField] private float liftTime = 1.3f;
 
     [Header("숨었다가 튀어나오기 (켜면 맵을 계속 돌아다니지 않음)")]
     [SerializeField] private bool ambushMode = true;
@@ -180,6 +185,15 @@ public class PresenceAI : MonoBehaviour
     private AudioSource crawlSource;
     private float climbTimer;       // 계단 이용 중 남은 시간 (0보다 크면 이용 중)
     private Vector2 climbTo;
+    private int sweepVisit;         // 지하 훑기 중 숨은 곳 들르기: 0 아직, 1 가는 중, 2 노려보는 중, 3 끝
+    private float sweepVisitX;
+    private bool revealing;         // 숨은 곳을 들추는 중 (게임오버 연출)
+
+    // 쫓기는 음악용 (Ambience가 읽음): 비명을 지르고 쫓아오는 동안만 true
+    // (발견해서 비명 → 추격 → 덮치기, 마지막 추격의 떨어짐·울부짖음·추격. 그냥 돌아다니거나 지하를 훑을 때는 아님)
+    public bool IsChasing => CurrentState == State.Noticing || CurrentState == State.Chasing || CurrentState == State.Pouncing
+                          || CurrentState == State.Dropping || CurrentState == State.Roaring || CurrentState == State.Hunting
+                          || (CurrentState == State.Caught && !revealing);
 
     private bool HasPatrol => patrolPoints != null && patrolPoints.Length > 0;
     private bool HasRoute => HasPatrol || (autoRoam && roamRooms.Count > 0);
@@ -229,7 +243,7 @@ public class PresenceAI : MonoBehaviour
 
     void Update()
     {
-        if (cat == null || paused) { UpdateCrawlSound(false); return; }
+        if (cat == null || paused || revealing) { UpdateCrawlSound(false); return; }
         stateTimer += Time.deltaTime;
 
         // 계단을 오르내리는 중: 안 보이고, 잡지도 않고, 끝나면 연결된 계단 앞에 나타남
@@ -252,7 +266,7 @@ public class PresenceAI : MonoBehaviour
         if (rawHidden && !wasHidden && SawHiding())
         {
             exposed = true;
-            if (HintUI.Instance != null) HintUI.Instance.ShowMessage(exposedMessage, 1.5f);
+            if (HintUI.Instance != null) HintUI.Instance.ShowItemMessage(exposedMessage, 1.8f);   // 노란 메시지로 꼭 보이게
             if (CurrentState != State.Chasing && CurrentState != State.Pouncing && CurrentState != State.Hunting)
                 SetState(State.Noticing);
             GameLog.Info("존재: 숨는 걸 봤다");
@@ -268,17 +282,11 @@ public class PresenceAI : MonoBehaviour
         alpha = Mathf.MoveTowards(alpha, target, (CurrentState == State.Vanished ? vanishFadeSpeed : fadeSpeed) * Time.deltaTime);
         SetAlpha(alpha);
 
-        // 숨었으면 어디든(다른 층·안전한 방이어도) 숨은 자리 바로 앞까지 찾아와서 노려보다가 사라짐
+        // 숨었으면 어디든(다른 층·지하·안전한 방이어도) 숨은 자리 바로 앞까지 찾아와서 노려보다가 사라짐
         // (숨어 있으면 잡히지 않음)
-        if (ambushMode && !relentless && hidden && !InEventOnlyRoom(lastKnown)
+        if (ambushMode && !relentless && hidden
             && (CurrentState == State.Patrolling || CurrentState == State.Lurking || CurrentState == State.Returning))
             SetState(State.Investigating);
-        // 지하(연출만 있는 방)에 숨었거나 그쪽 소리를 들었으면 찾아가지 않고 포기
-        if (!relentless && (CurrentState == State.Investigating || CurrentState == State.Searching) && InEventOnlyRoom(lastKnown))
-        {
-            GiveUp();
-            return;
-        }
 
         // 무언가를 만드는 동안(퓨즈 끼우기·열쇠 붙이기)에는 새로 나타나거나 다가오지 않고 사라짐
         // 단, 이미 쫓고 있던 중(발견·추격·덮치기·숨은 곳 찾기)이면 그대로 쫓아옴
@@ -294,7 +302,7 @@ public class PresenceAI : MonoBehaviour
         if (glow != null)
         {
             bool glowOn = CurrentState == State.Glimpse
-                       || (rawHidden && (CurrentState == State.Investigating || CurrentState == State.Searching));
+                       || (rawHidden && (CurrentState == State.Investigating || CurrentState == State.Searching || CurrentState == State.Sweeping));
             glow.intensity = glowOn ? glowIntensity * alpha : 0f;
         }
 
@@ -388,8 +396,7 @@ public class PresenceAI : MonoBehaviour
                     SetState(State.Pouncing);
                 }
                 else if (routeStairs != null && Mathf.Abs(gx - rb.position.x) < 0.05f) { TakeStairs(routeStairs); break; }
-                // 고양이가 지하(연출만 있는 방)로 도망치면 따라가지 않고 포기
-                if (InEventOnlyRoom(cat.transform.position)) { GiveUp(); break; }
+                // 지하로 도망쳐도 계단으로 따라 내려감 (예전에는 여기서 포기했음)
                 // 같은 층에서 멀어지면 일정 시간 뒤 포기 (다른 층이면 계단으로 쫓아가는 중이라 세지 않음)
                 bool sameFloor = Stairs.SameFloor(cat.transform.position.y, rb.position.y);
                 loseTimer = sameFloor && dist > loseRange ? loseTimer + Time.deltaTime : 0f;
@@ -405,10 +412,28 @@ public class PresenceAI : MonoBehaviour
             case State.Sweeping:
             {
                 // 정해진 지점들을 차례로 훑고 지나감 (숨지 않은 쪽은 닿으면 잡힘)
-                float gx = sweepXs[sweepIndex];
+                // 숨어 있으면 들키지 않았어도 숨은 곳 바로 앞까지 와서 잠깐 노려본 뒤 다시 훑음
+                if (sweepVisit == 0 && hidden && Stairs.SameFloor(lastKnown.y, rb.position.y))
+                {
+                    sweepVisit = 1;
+                    float side = rb.position.x >= lastKnown.x ? 1f : -1f;
+                    sweepVisitX = lastKnown.x + side * hideStopDistance;
+                }
+                if (sweepVisit == 2)
+                {
+                    Play(idleFrames, idleFps);
+                    Face(lastKnown.x - rb.position.x);
+                    if (stateTimer >= searchTime + 1f) sweepVisit = 3;
+                    break;
+                }
+                float gx = SweepTargetX();
                 Face(gx - rb.position.x);
                 Play(crawlFrames, crawlFps * 0.7f);
-                if (Mathf.Abs(gx - rb.position.x) < 0.05f && ++sweepIndex >= sweepXs.Length) FinishSweep();
+                if (sweepVisit == 1)
+                {
+                    if (Mathf.Abs(gx - rb.position.x) < 0.05f) { sweepVisit = 2; stateTimer = 0f; }
+                }
+                else if (Mathf.Abs(gx - rb.position.x) < 0.05f && ++sweepIndex >= sweepXs.Length) FinishSweep();
                 break;
             }
 
@@ -495,8 +520,8 @@ public class PresenceAI : MonoBehaviour
             case State.Returning: speed = returnSpeed; targetX = home.x; break;
             case State.Patrolling: speed = patrolSpeed; targetX = TargetX(); break;
             case State.Sweeping:
-                speed = sweepSpeed;
-                targetX = sweepXs[Mathf.Min(sweepIndex, sweepXs.Length - 1)];
+                speed = sweepVisit == 2 ? 0f : sweepSpeed;
+                targetX = SweepTargetX();
                 break;
             case State.Hunting:
                 targetX = HuntTargetX();
@@ -526,6 +551,14 @@ public class PresenceAI : MonoBehaviour
             return;                              // 추격 이벤트(Hunting) 중에도 문턱에서 기다림
         }
         rb.MovePosition(new Vector2(newX, rb.position.y));
+    }
+
+    // 지하 훑기 목표: 숨은 곳에 들르는 중이면 그 앞, 아니면 다음 훑을 지점
+    private float SweepTargetX()
+    {
+        if (sweepVisit == 1) return sweepVisitX;
+        if (sweepVisit == 2) return rb.position.x;
+        return sweepXs[Mathf.Min(sweepIndex, sweepXs.Length - 1)];
     }
 
     private bool InEventOnlyRoom(Vector2 p)
@@ -644,6 +677,7 @@ public class PresenceAI : MonoBehaviour
         PlayStairsSound(start, start, true);   // 계단을 내려오는 소리 (이벤트라 항상 들림)
         sweepXs = xs;
         sweepIndex = 0;
+        sweepVisit = 0;
         sweepSpeed = speed;
         onSweepDone = done;
         alpha = 1f;
@@ -837,6 +871,10 @@ public class PresenceAI : MonoBehaviour
         Vector2 c = cat.transform.position;
         Vector2 d = c - me;
         if (Mathf.Abs(d.x) > seeHideRange || !Stairs.SameFloor(c.y, rb.position.y)) return false;
+        // 쫓거나 찾는 중이 아니면(그냥 돌아다니는 중) 아주 가까이에서 숨을 때만 알아챔
+        bool alert = CurrentState == State.Noticing || CurrentState == State.Chasing || CurrentState == State.Pouncing
+                  || CurrentState == State.Hunting || CurrentState == State.Sweeping || CurrentState == State.Searching;
+        if (!alert && Mathf.Abs(d.x) > calmSeeRange) return false;
         int facing = (spriteFacesRight ? !sr.flipX : sr.flipX) ? 1 : -1;
         if (Mathf.Abs(d.x) > 1.5f && Mathf.Sign(d.x) != facing) return false;
         return Physics2D.Linecast(me, c + Vector2.up * 0.3f, wallLayer).collider == null;
@@ -943,7 +981,9 @@ public class PresenceAI : MonoBehaviour
     private bool FindSpot(Vector2 c, int forcedSide, Vector2 distance, out Vector2 spot, bool allowEventOnly = false)
     {
         int behind = -cat.Facing;
-        for (int tries = 0; tries < 8; tries++)
+        Room catRoom = Room.Find(c);
+        // 앞의 8번은 고양이와 같은 방 안에서만 찾음 (엉뚱한 옆방에 나타나지 않게), 못 찾으면 옆방도 허용
+        for (int tries = 0; tries < 16; tries++)
         {
             int side = forcedSide != 0 ? forcedSide : (Random.value < appearBehindChance ? behind : -behind);
             float x = c.x + side * Random.Range(distance.x, distance.y);
@@ -954,6 +994,7 @@ public class PresenceAI : MonoBehaviour
 
             Room r = Room.Find(p + Vector2.up * 0.5f);
             if (r == null || System.Array.IndexOf(safeRoomNames, r.RoomName) >= 0) continue;
+            if (tries < 8 && catRoom != null && r != catRoom) continue;
             if (System.Array.IndexOf(noAppearRoomNames, r.RoomName) >= 0) continue;   // 2번 방에는 나타나지 않음
             if (!allowEventOnly && System.Array.IndexOf(eventOnlyRoomNames, r.RoomName) >= 0) continue;
 
@@ -973,13 +1014,96 @@ public class PresenceAI : MonoBehaviour
         bool catHidden = HideController.IsHidden && !exposed;
         bool ownerHidden = owner != null && owner.CurrentState == OwnerController.State.Hiding && !exposed;
 
-        if (!catHidden && catCol != null && col.bounds.Intersects(catCol.bounds))
-            Caught("고양이");
-        else if (!ownerHidden && ownerCol != null && col.bounds.Intersects(ownerCol.bounds))
-            Caught("주인");
+        // 숨는 걸 들킨 채 숨어 있으면: 숨은 곳을 들춰서 끌어냄
+        bool catInSpot = HideController.IsHidden && exposed && HideController.Current != null;
+        if (catInSpot && (Touching(catCol) || Touching(ownerCol)))
+        {
+            StartCoroutine(RevealHide(HideController.Current));
+            return;
+        }
+
+        if (!catHidden && Touching(catCol))
+            Caught("고양이", "고양이가 잡혔다");
+        else if (!ownerHidden && Touching(ownerCol))
+            Caught("주인", owner != null && owner.CurrentState == OwnerController.State.Hiding ? "숨는 걸 들켰다" : "주인이 잡혔다");
     }
 
-    private void Caught(string who)
+    private bool Touching(Collider2D c) => c != null && col.bounds.Intersects(c.bounds);
+
+    // 숨은 곳 들추기: 숨은 곳 앞에 서서 몸을 기울여 상자·책상을 들썩 → 고양이(와 주인)가 드러나며 잡힘
+    private System.Collections.IEnumerator RevealHide(HideSpot spot)
+    {
+        revealing = true;
+        SetState(State.Caught);
+        GameInput.SetCutscene(true);
+        UpdateCrawlSound(false);
+        if (crawlSource != null) crawlSource.volume = 0f;
+        GameLog.Info($"존재: {spot.SpotName}을(를) 들춤");
+
+        Vector2 sc = spot.Center;
+        float dir = sc.x >= rb.position.x ? 1f : -1f;          // 숨은 곳이 있는 쪽
+        Transform vis = sr.transform;
+        Vector3 visPos = vis.localPosition;
+        SpriteRenderer prop = spot.Prop;
+        Vector3 propPos = prop != null ? prop.transform.localPosition : Vector3.zero;
+        alpha = 1f;
+        SetAlpha(1f);
+        Face(dir);
+
+        // 1) 숨은 곳 바로 옆으로 다가섬
+        Vector2 from = rb.position, to = new Vector2(sc.x - dir * 0.75f, rb.position.y);
+        float t = 0f;
+        while (t < 0.3f)
+        {
+            t += Time.deltaTime;
+            MoveTo(Vector2.Lerp(from, to, t / 0.3f));
+            if (idleFrames != null && idleFrames.Length > 0) sr.sprite = idleFrames[0];
+            yield return null;
+        }
+
+        // 2) 몸을 숙여 붙잡고 들어 올림 (상자·책상 그림이 있으면 들썩임)
+        float lift = liftTime * 0.6f;
+        t = 0f;
+        while (t < lift)
+        {
+            t += Time.deltaTime;
+            float k = Mathf.SmoothStep(0f, 1f, t / lift);
+            if (liftFrames != null && liftFrames.Length > 0)
+                sr.sprite = liftFrames[Mathf.Min((int)(t / lift * liftFrames.Length), liftFrames.Length - 1)];
+            else
+            {
+                vis.localRotation = Quaternion.Euler(0f, 0f, -dir * 22f * k);   // 숨은 곳 쪽으로 몸을 기울임
+                vis.localPosition = visPos + new Vector3(dir * 0.3f * k, -0.1f * k, 0f);
+            }
+            if (prop != null)
+            {
+                float shake = Mathf.Sin(t * 60f) * 0.03f * (1f - k);
+                prop.transform.localPosition = propPos + new Vector3(shake, 0.55f * k, 0f);
+                prop.transform.localRotation = Quaternion.Euler(0f, 0f, dir * 18f * k);
+            }
+            yield return null;
+        }
+
+        // 3) 들춰짐: 숨어 있던 고양이·주인이 드러나고 덮침
+        if (HideController.Instance != null) HideController.Instance.Expose();
+        Sfx.Play(noticeClip, noticeVolume);
+        var camFollow = FindAnyObjectByType<CameraFollow>();
+        if (camFollow != null) camFollow.Shake(0.35f, 0.12f);
+        vis.localRotation = Quaternion.Euler(0f, 0f, -dir * 8f);
+        if (pounceSprite != null && (liftFrames == null || liftFrames.Length == 0)) sr.sprite = pounceSprite;
+        t = 0f;
+        while (t < liftTime * 0.4f)
+        {
+            t += Time.deltaTime;
+            if (prop != null) prop.transform.localPosition = propPos + new Vector3(0f, 0.55f + t * 0.8f, 0f);
+            yield return null;
+        }
+
+        GameLog.Info($"존재에게 들켜 {spot.SpotName}에서 끌려 나왔다!");
+        if (GameManager.Instance != null) GameManager.Instance.GameOver("숨은 곳이 들킴", "숨는 걸 들켰다");
+    }
+
+    private void Caught(string who, string shown = null)
     {
         SetState(State.Caught);
         if (pounceSprite != null) sr.sprite = pounceSprite;
@@ -987,7 +1111,7 @@ public class PresenceAI : MonoBehaviour
         SetAlpha(1f);
         GameLog.Info($"존재에게 {who}이(가) 잡혔다!");
 
-        if (GameManager.Instance != null) GameManager.Instance.GameOver($"{who}이(가) 잡힘");
+        if (GameManager.Instance != null) GameManager.Instance.GameOver($"{who}이(가) 잡힘", shown);
         else Debug.LogWarning("GameManager가 씬에 없어서 게임오버를 할 수 없어요");
     }
 

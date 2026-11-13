@@ -6,7 +6,16 @@ public class HideSpot : MonoBehaviour
 {
     [SerializeField] private string spotName = "박스";
 
+    [Header("숨을 때 소리 (비워두면 고양이의 기본 숨기 소리)")]
+    [SerializeField] private AudioClip hideClip;           // 상자: 상자 속으로 들어가는 소리, 책상: 책상 밑으로 들어가는 소리
+
+    [Header("들출 그림 (존재에게 들켰을 때 들썩임. 배경에 그려진 물건이면 비워둠)")]
+    [SerializeField] private SpriteRenderer prop;
+
     public string SpotName => spotName;
+    public AudioClip HideClip => hideClip;
+    public SpriteRenderer Prop => prop;
+    public Vector2 Center => area != null ? (Vector2)area.bounds.center : (Vector2)transform.position;
 
     private BoxCollider2D area;
 

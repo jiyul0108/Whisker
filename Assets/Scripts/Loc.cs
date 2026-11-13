@@ -203,5 +203,22 @@ public static class Loc
         { "부러진 열쇠를 여기서 붙일 수 있을 것 같다", "The broken key could be fixed here" },
         { "출구 열쇠가 완성됐다! 톡— 바닥에 떨어졌다", "The exit key is complete! Tink— it dropped to the floor" },
         { "피 묻은 수술대다", "A bloodstained operating table" },
+
+        // ---------- 1차 테스트 뒤 추가 ----------
+        { "굳게 잠겨 있다", "Firmly locked" },
+        { "숨는 걸 들켰다…!", "It saw you hide…!" },
+        { "숨는 걸 들켰다", "It saw you hide" },
+        { "고양이가 잡혔다", "The cat was caught" },
+        { "주인이 잡혔다", "Your owner was caught" },
+        { "잡힌 횟수  {0}", "Times caught  {0}" },
+        { "상자", "box" },
+        { "안내데스크", "reception desk" },
+        { "지하 창고 두꺼비집의 퓨즈가 또 나갔다.", "The fuse in the basement storage fuse box blew again." },
+        { "예비 퓨즈는 1층 대기실 벽시계 뒤에 붙여 두었음.", "I taped a spare fuse behind the wall clock in the 1F waiting room." },
+        { "(의자와 책상이 있는 방)", "(the room with the chair and the desk)" },
+        { "시계가 높으니 의자를 밀어서 밟고 올라갈 것.", "The clock is high up. Push the chair under it and stand on it." },
+        { "시계 뒤에 무언가 붙어 있다. 먼저 지하 두꺼비집을 확인해 보자", "Something is stuck behind the clock. Better check the basement fuse box first." },
+        { "작동하지 않는다. 퓨즈가 하나 빠져 있다… 예비 퓨즈를 찾아야 한다", "It doesn't work. A fuse is missing… I need a spare one." },
+        { "재료가 부족하다", "Not enough materials" },
     };
 }

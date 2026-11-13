@@ -105,14 +105,14 @@ public class Stairs : MonoBehaviour
         // 전원 이벤트 중: 존재가 계단으로 내려오는 중이라 도망칠 수 없음
         if (PowerEvent.BlockStairs)
         {
-            if (HintUI.Instance != null) HintUI.Instance.ShowMessage("계단에서 무언가 내려오고 있다… 숨어야 한다!", 2f);
+            if (HintUI.Instance != null) HintUI.Instance.ShowItemMessage("계단에서 무언가 내려오고 있다… 숨어야 한다!", 2f);
             return;
         }
 
         if (!unlocked && !string.IsNullOrEmpty(requiredFlag))
         {
             if (GameFlags.Has(requiredFlag)) StartCoroutine(RemoteUnlock());
-            else if (HintUI.Instance != null) HintUI.Instance.ShowMessage(flagLockedMessage, 2f);
+            else if (HintUI.Instance != null) HintUI.Instance.ShowItemMessage(flagLockedMessage, 2.2f);   // 노란 메시지로 보이게
             return;
         }
 
@@ -280,7 +280,8 @@ public class Stairs : MonoBehaviour
         string text = null;
         if (on)
         {
-            if (!unlocked) text = string.IsNullOrEmpty(requiredFlag) ? "문 열기" : "조사하기";
+            // 전자 잠금(전기가 아직 안 들어옴)은 조사하기 대신 "굳게 잠겨 있다"로 바로 알려줌
+            if (!unlocked) text = string.IsNullOrEmpty(requiredFlag) || GameFlags.Has(requiredFlag) ? "문 열기" : "굳게 잠겨 있다";
             else text = OwnerComes() ? Loc.F("주인과 {0}", Loc.T(label)) : $"{label}  (주인은 못 따라옴)";
             text = $"↑  {text}";
         }

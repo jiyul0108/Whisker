@@ -20,6 +20,8 @@ public class Interactable : MonoBehaviour
     [SerializeField] private string readyLabel = "";          // 조건(진행·아이템)을 다 채웠을 때의 안내 (예: 열쇠 조각 붙이기). 비우면 Label
     [SerializeField] private bool requireClimbing = false;      // 켜면 벽을 타고 있을 때만 (높은 곳의 시계)
     [SerializeField] private bool alwaysShowMessages = false;   // 켜면 이 물건의 문구는 모두 노란 메시지로 보여줌 (두꺼비집)
+    [SerializeField] private bool hideUntilReady = false;       // 켜면 조건(진행·아이템)을 다 채우기 전에는 안내도 없고 조사도 안 됨 (수술대)
+    [SerializeField] private bool showSparkle = true;           // 아이템을 주는 곳이면 찾을 때까지 반짝임 (Required Flag가 있으면 그 진행 뒤부터)
 
     [Header("조건: 진행")]
     [SerializeField] private string requiredFlag = "";
@@ -63,6 +65,7 @@ public class Interactable : MonoBehaviour
     private Collider2D catCol;
     private bool done;
     private bool hinting;
+    private Sparkle sparkle;
 
     void Awake()
     {
@@ -76,16 +79,28 @@ public class Interactable : MonoBehaviour
         if (cat != null) catCol = cat.GetComponent<Collider2D>();
     }
 
+    // 반짝임: 아이템을 주는 곳에서, 필요한 진행을 채웠고 아직 안 찾았을 때만
+    private void UpdateSparkle()
+    {
+        bool want = showSparkle && !done && !string.IsNullOrEmpty(rewardItem)
+                    && (string.IsNullOrEmpty(requiredFlag) || GameFlags.Has(requiredFlag));
+        if (want == (sparkle != null)) return;
+        if (want) sparkle = Sparkle.Attach(transform, (Vector3)area.offset + new Vector3(0.15f, 0.2f, 0f));
+        else { Destroy(sparkle.gameObject); sparkle = null; }
+    }
+
     void OnDisable() { SetHint(false); }
 
     void Update()
     {
         if (cat == null) return;
+        UpdateSparkle();
         if (GameInput.Blocked) { SetHint(false); return; }
 
         bool near = catCol != null && area.bounds.Intersects(catCol.bounds)
                     && !HideController.IsHidden
                     && requireClimbing == ClimbSpot.IsClimbing
+                    && !(hideUntilReady && !done && !Ready())
                     && !(done && oneShot && string.IsNullOrEmpty(doneMessage) && !Repeatable);
         SetHint(near);
         if (!near) return;

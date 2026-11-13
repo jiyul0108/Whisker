@@ -31,7 +31,18 @@ public class GameManager : MonoBehaviour
     public bool IsGameOver { get; private set; }   // 게임이 끝났는가 (잡힘 또는 탈출)
     public bool IsCleared { get; private set; }    // 탈출에 성공했는가
 
-    private float startTime;
+    // 플레이 시간·잡힌 횟수: 잡혀서 처음부터 다시 해도 이어서 셈 (타이틀로 가거나 탈출 후 다시 하면 새로 셈)
+    private static float runStart = -1f;
+    private static int deaths;
+    public static float PlayTime => runStart < 0f ? 0f : Time.time - runStart;
+    public static int Deaths => deaths;
+
+    // 새 판 시작 (TitleScreen이 게임을 시작할 때, 탈출 후 다시 할 때)
+    public static void ResetRun()
+    {
+        runStart = -1f;
+        deaths = 0;
+    }
 
     private Image fadeImage;
     private Text titleText;
@@ -41,7 +52,7 @@ public class GameManager : MonoBehaviour
     {
         Instance = this;
         Time.timeScale = 1f;
-        startTime = Time.time;
+        if (runStart < 0f) runStart = Time.time;   // 처음 시작할 때만 (다시 시작하면 이어서)
         BuildUI();
     }
 
@@ -59,15 +70,18 @@ public class GameManager : MonoBehaviour
     }
 
     // 존재에게 잡혔을 때 PresenceAI가 호출
-    public void GameOver(string reason)
+    // shown: 화면에 함께 보여줄 이유 (예: "주인이 잡혔다", "숨는 걸 들켰다"). 비우면 안 보여줌
+    public void GameOver(string reason, string shown = null)
     {
         if (IsGameOver) return;
         IsGameOver = true;
+        deaths++;
         Sfx.Play(caughtClip, caughtVolume);
-        GameLog.Info($"게임오버: {reason}");
+        GameLog.Info($"게임오버: {reason} (잡힌 횟수 {deaths})");
         titleText.text = Loc.T(caughtTitle);
         titleText.color = new Color(0.75f, 0.05f, 0.05f);
-        subText.text = Loc.T(caughtHint);
+        subText.text = (string.IsNullOrEmpty(shown) ? "" : Loc.T(shown) + "\n\n")
+                       + Loc.F("플레이 시간  {0}", FormatTime(PlayTime)) + "\n\n" + Loc.T(caughtHint);
         StartCoroutine(EndRoutine(freezeTime));
     }
 
@@ -78,11 +92,12 @@ public class GameManager : MonoBehaviour
         IsGameOver = true;
         IsCleared = true;
         Sfx.Play(clearClip, clearVolume);
-        float t = Time.time - startTime;
-        GameLog.Info($"탈출 성공! 플레이 시간 {t:0}초");
+        float t = PlayTime;
+        GameLog.Info($"탈출 성공! 플레이 시간 {t:0}초, 잡힌 횟수 {deaths}");
         titleText.text = Loc.T(clearTitle);
         titleText.color = new Color(0.85f, 0.8f, 0.6f);
-        subText.text = Loc.F("플레이 시간  {0}", $"{(int)t / 60:00}:{(int)t % 60:00}") + "\n\n" + Loc.T(clearHint);
+        subText.text = Loc.F("플레이 시간  {0}", FormatTime(t)) + "\n" + Loc.F("잡힌 횟수  {0}", deaths)
+                       + "\n\n" + Loc.T(clearHint);
         StartCoroutine(EndRoutine(0.3f));
     }
 
@@ -119,9 +134,12 @@ public class GameManager : MonoBehaviour
         Restart();
     }
 
-    // 처음부터 다시 시작 (체크포인트 없음 = 씬을 새로 불러옴)
+    private static string FormatTime(float t) => $"{(int)t / 60:00}:{(int)t % 60:00}";
+
+    // 처음부터 다시 시작 (체크포인트 없음 = 씬을 새로 불러옴). 탈출한 뒤라면 시간도 새로
     public void Restart()
     {
+        if (IsCleared) ResetRun();
         Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
@@ -156,6 +174,10 @@ public class GameManager : MonoBehaviour
         Font f = font != null ? font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");   // Start에서 Galmuri로 바뀜
         titleText = CreateText(canvasGO.transform, f, caughtTitle, 120, new Color(0.75f, 0.05f, 0.05f), 80f);
         subText = CreateText(canvasGO.transform, f, caughtHint, 40, new Color(0.8f, 0.8f, 0.8f), -110f);
+        // 여러 줄(이유·플레이 시간·안내)이어도 제목과 겹치지 않게 위에서부터 아래로 씀
+        subText.alignment = TextAnchor.UpperCenter;
+        subText.rectTransform.pivot = new Vector2(0.5f, 1f);
+        subText.rectTransform.anchoredPosition = new Vector2(0f, -10f);
         titleText.enabled = false;
         subText.enabled = false;
     }

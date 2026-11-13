@@ -12,6 +12,9 @@ public class KeyItem : MonoBehaviour
     [SerializeField] private float bobHeight = 0.06f;
     [SerializeField] private float bobSpeed = 2.5f;
 
+    [Header("반짝임 (바닥에 떨어진 열쇠가 잘 보이게)")]
+    [SerializeField] private bool showSparkle = true;
+
     private Transform visual;
     private Vector3 visualBase;
 
@@ -24,6 +27,7 @@ public class KeyItem : MonoBehaviour
             visual = sr.transform;              // 그림이 자식(Visual)에 있으면 그림만 움직임
             visualBase = visual.localPosition;
         }
+        if (showSparkle) Sparkle.Attach(transform, new Vector3(0.12f, 0.3f, 0f));
     }
 
     void Update()

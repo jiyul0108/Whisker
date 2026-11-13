@@ -7,10 +7,14 @@ using UnityEngine.InputSystem;
 public class HideController : MonoBehaviour
 {
     public static bool IsHidden { get; private set; }      // 고양이가 숨었는가
+    public static HideSpot Current { get; private set; }   // 지금 숨어 있는 곳 (존재가 들출 때 씀)
+    public static HideController Instance { get; private set; }
 
     [SerializeField] private OwnerController owner;
     [SerializeField] private float hiddenAlpha = 0.6f;     // 숨은 동안 반투명
-    [SerializeField] private AudioClip hideClip;           // 숨기·나오기 소리 (비워두면 소리 없음)
+    [SerializeField] private AudioClip hideClip;           // 숨기·나오기 기본 소리 (아래 둘이 비어 있을 때)
+    [SerializeField] private AudioClip boxClip;            // 상자·박스에 숨을 때 (숨을 곳에 소리가 따로 없으면 이름으로 고름)
+    [SerializeField] private AudioClip deskClip;           // 책상·수술대 등 나머지에 숨을 때
     [SerializeField, Range(0f, 1f)] private float hideVolume = 0.8f;
 
     private CatController cat;
@@ -25,6 +29,8 @@ public class HideController : MonoBehaviour
     void Awake()
     {
         IsHidden = false;
+        Current = null;
+        Instance = this;
         cat = GetComponent<CatController>();
         catCol = GetComponent<Collider2D>();
         catSr = GetComponentInChildren<SpriteRenderer>();
@@ -44,6 +50,15 @@ public class HideController : MonoBehaviour
     void OnDestroy()
     {
         IsHidden = false;
+        Current = null;
+        if (Instance == this) Instance = null;
+    }
+
+    // 존재에게 들켜 끌려 나옴: 숨은 그림(반투명)을 원래대로 (게임오버 직전 연출용, 소리 없음)
+    public void Expose()
+    {
+        SetAlpha(catSr, 1f);
+        if (ownerHidden) SetAlpha(ownerSr, 1f);
     }
 
     void Update()
@@ -87,9 +102,10 @@ public class HideController : MonoBehaviour
     private void Hide(HideSpot spot)
     {
         current = spot;
+        Current = spot;
         IsHidden = true;
         SetAlpha(catSr, hiddenAlpha);
-        Sfx.Play(hideClip, hideVolume);
+        Sfx.Play(ClipFor(spot), hideVolume);   // 숨을 곳마다 다른 소리 (상자·책상)
 
         ownerHidden = OwnerInside(spot);
         if (ownerHidden)
@@ -107,9 +123,11 @@ public class HideController : MonoBehaviour
     private void Unhide()
     {
         IsHidden = false;
+        AudioClip outClip = ClipFor(current);
         current = null;
+        Current = null;
         SetAlpha(catSr, 1f);
-        Sfx.Play(hideClip, hideVolume * 0.7f);   // 나올 때는 조금 작게
+        Sfx.Play(outClip, hideVolume * 0.7f);   // 나올 때는 조금 작게
         if (ownerHidden)
         {
             owner.Unhide();
@@ -117,6 +135,16 @@ public class HideController : MonoBehaviour
             ownerHidden = false;
         }
         GameLog.Info("숨은 곳에서 나왔다");
+    }
+
+    // 숨을 곳의 소리: 숨을 곳에 직접 넣은 소리 → 이름에 상자·박스가 있으면 상자 소리, 아니면 책상 소리 → 기본 소리
+    private AudioClip ClipFor(HideSpot spot)
+    {
+        if (spot == null) return hideClip;
+        if (spot.HideClip != null) return spot.HideClip;
+        string n = spot.SpotName ?? "";
+        AudioClip byName = n.Contains("상자") || n.Contains("박스") ? boxClip : deskClip;
+        return byName != null ? byName : hideClip;
     }
 
     private static void SetAlpha(SpriteRenderer sr, float a)
