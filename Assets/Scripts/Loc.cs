@@ -220,5 +220,15 @@ public static class Loc
         { "시계 뒤에 무언가 붙어 있다. 먼저 지하 두꺼비집을 확인해 보자", "Something is stuck behind the clock. Better check the basement fuse box first." },
         { "작동하지 않는다. 퓨즈가 하나 빠져 있다… 예비 퓨즈를 찾아야 한다", "It doesn't work. A fuse is missing… I need a spare one." },
         { "재료가 부족하다", "Not enough materials" },
+
+        // ---------- 2차 테스트 뒤 추가 ----------
+        { "(몸이 굳어 느려진다)", "(Frozen stiff, moving slowly)" },
+        { "주인이 겁에 질려 몸이 굳었다 (느려짐)", "Your owner is frozen with fear (moving slowly)" },
+        { "공포도가 가득 차면 비명을 질러 존재를 부른다. 곁에서 울어(E) 진정시키자", "When fear is full, they scream and call the presence. Stay close and meow (E) to calm them" },
+        { "주의", "WARNING" },
+        { "이 게임에는 갑자기 나타나는 귀신, 비명 소리, 어두운 화면 등 공포 연출이 포함되어 있습니다.", "This game contains horror elements such as sudden ghost appearances, screams and dark scenes." },
+        { "심장이 약하거나 공포 연출에 민감한 분은 플레이에 주의해 주세요.", "Players who are faint-hearted or sensitive to horror should play with caution." },
+        { "헤드폰을 쓴다면 소리를 조금 낮춰 주세요.", "If you are using headphones, please lower the volume a little." },
+        { "Enter  계속", "Enter  Continue" },
     };
 }

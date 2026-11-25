@@ -69,8 +69,8 @@ public class PresenceAI : MonoBehaviour
     [SerializeField] private float patrolWait = 2f;     // 목적지에 도착하면 이만큼 멈춰 있음
 
     [Header("숨는 걸 들킴 (존재가 보는 앞에서 숨으면 숨을 곳까지 쫓아와 잡음)")]
-    [SerializeField] private float seeHideRange = 7f;    // 이 거리 안에서, 존재가 바라보는 쪽에서 숨으면 들킴
-    [SerializeField] private float calmSeeRange = 3f;    // 아직 고양이를 발견하지 않은 존재는 이 거리 안에서 숨어야만 알아챔
+    [SerializeField] private float seeHideRange = 6f;    // 이 거리 안에서, 존재가 바라보는 쪽에서 숨으면 들킴
+    [SerializeField] private float calmSeeRange = 2.5f;    // 아직 고양이를 발견하지 않은 존재는 이 거리 안에서 숨어야만 알아챔
     [SerializeField] private string exposedMessage = "숨는 걸 들켰다…!";
 
     [Header("숨은 곳 들추기 (숨는 걸 들킨 채 잡히면 상자·책상을 들춰서 끌어냄)")]
@@ -185,7 +185,9 @@ public class PresenceAI : MonoBehaviour
     private AudioSource crawlSource;
     private float climbTimer;       // 계단 이용 중 남은 시간 (0보다 크면 이용 중)
     private Vector2 climbTo;
-    private int sweepVisit;         // 지하 훑기 중 숨은 곳 들르기: 0 아직, 1 가는 중, 2 노려보는 중, 3 끝
+    private int sweepVisit;         // 지하 훑기 중 숨은 곳 들르기: 0 아직, 1 가는 중, 2 노려보는 중, 3 계단으로 돌아가는 중
+    private float sweepStairsX;     // 내려온 계단 위치 (숨은 곳을 확인한 뒤 바로 여기로 돌아가 올라감)
+    private const float SweepVisitSpeed = 3f;   // 숨은 곳으로 가거나 계단으로 돌아갈 때 최소 속도 (훑는 속도보다 빠르게)
     private float sweepVisitX;
     private bool revealing;         // 숨은 곳을 들추는 중 (게임오버 연출)
 
@@ -423,7 +425,7 @@ public class PresenceAI : MonoBehaviour
                 {
                     Play(idleFrames, idleFps);
                     Face(lastKnown.x - rb.position.x);
-                    if (stateTimer >= searchTime + 1f) sweepVisit = 3;
+                    if (stateTimer >= searchTime) sweepVisit = 3;   // 다 봤으면 남은 곳은 건너뛰고 계단으로
                     break;
                 }
                 float gx = SweepTargetX();
@@ -432,6 +434,10 @@ public class PresenceAI : MonoBehaviour
                 if (sweepVisit == 1)
                 {
                     if (Mathf.Abs(gx - rb.position.x) < 0.05f) { sweepVisit = 2; stateTimer = 0f; }
+                }
+                else if (sweepVisit == 3)
+                {
+                    if (Mathf.Abs(gx - rb.position.x) < 0.05f) FinishSweep();   // 계단에 도착 → 올라감
                 }
                 else if (Mathf.Abs(gx - rb.position.x) < 0.05f && ++sweepIndex >= sweepXs.Length) FinishSweep();
                 break;
@@ -520,7 +526,9 @@ public class PresenceAI : MonoBehaviour
             case State.Returning: speed = returnSpeed; targetX = home.x; break;
             case State.Patrolling: speed = patrolSpeed; targetX = TargetX(); break;
             case State.Sweeping:
-                speed = sweepVisit == 2 ? 0f : sweepSpeed;
+                speed = sweepVisit == 2 ? 0f
+                      : sweepVisit == 1 || sweepVisit == 3 ? Mathf.Max(sweepSpeed, SweepVisitSpeed)
+                      : sweepSpeed;
                 targetX = SweepTargetX();
                 break;
             case State.Hunting:
@@ -558,6 +566,7 @@ public class PresenceAI : MonoBehaviour
     {
         if (sweepVisit == 1) return sweepVisitX;
         if (sweepVisit == 2) return rb.position.x;
+        if (sweepVisit == 3) return sweepStairsX;
         return sweepXs[Mathf.Min(sweepIndex, sweepXs.Length - 1)];
     }
 
@@ -670,6 +679,7 @@ public class PresenceAI : MonoBehaviour
     public void SetPaused(bool p) { paused = p; }
 
     // 지하 훑기: start에 나타나 xs 지점들을 차례로 지나간 뒤 계단으로 올라감
+    // 고양이가 숨어 있으면 숨은 곳까지만 와서 노려본 뒤, 남은 지점은 건너뛰고 바로 계단으로 올라감
     public void StartSweep(Vector2 start, float[] xs, float speed, System.Action done)
     {
         relentless = false;
@@ -678,6 +688,7 @@ public class PresenceAI : MonoBehaviour
         sweepXs = xs;
         sweepIndex = 0;
         sweepVisit = 0;
+        sweepStairsX = start.x;
         sweepSpeed = speed;
         onSweepDone = done;
         alpha = 1f;

@@ -8,6 +8,7 @@ using UnityEngine.UI;
 // ↑↓로 고르고 Enter·Space로 누름. 마우스로 가리키고 클릭해도 됨
 // 설정은 같은 씬의 PauseMenu(Settings Only)를 연다 (언어를 바꾸면 타이틀 글자도 바로 바뀜)
 // 화면은 실행할 때 코드가 직접 만든다 (메뉴 Whisker > 타이틀 씬 만들기가 칸을 채움)
+// 게임을 처음 켜면 타이틀 전에 심약자 주의 화면을 먼저 보여준다 (Enter·Space·클릭으로 넘김, 한 번 켤 때 한 번만)
 public class TitleScreen : MonoBehaviour
 {
     [Header("연결")]
@@ -23,6 +24,12 @@ public class TitleScreen : MonoBehaviour
     [SerializeField] private string subtitle = "고양이만 볼 수 있는 것";
     [SerializeField] private string story = "폐병원에 갇힌 주인은 그곳을 떠도는 '존재'를 보지 못한다.\n그것을 볼 수 있는 건 고양이뿐.";
 
+    // 심약자 주의 화면 문구 (한국어 원문. 영어는 Loc 사전에서 찾음)
+    private const string WarnTitle = "주의";
+    private const string WarnBody = "이 게임에는 갑자기 나타나는 귀신, 비명 소리, 어두운 화면 등 공포 연출이 포함되어 있습니다.\n심장이 약하거나 공포 연출에 민감한 분은 플레이에 주의해 주세요.\n헤드폰을 쓴다면 소리를 조금 낮춰 주세요.";
+    private const string WarnHelp = "Enter  계속";
+    private static bool warned;     // 이번에 게임을 켠 뒤 주의 화면을 이미 봤는가 (타이틀로 돌아오면 다시 안 보여줌)
+
     private static readonly string[] ButtonNames = { "게임 시작", "설정" };
     private static readonly Color ButtonNormal = new Color(0.7f, 0.68f, 0.63f);
     private static readonly Color ButtonSelected = new Color(1f, 0.85f, 0.35f);
@@ -35,6 +42,9 @@ public class TitleScreen : MonoBehaviour
     private float flickerTimer;
     private int index;
     private bool settingsWasOpen;   // 설정을 닫은 그 Enter로 버튼이 또 눌리지 않게
+    private bool warning;           // 심약자 주의 화면을 보여주는 중
+    private GameObject warnRoot;
+    private Text warnTitleText, warnBodyText, warnHelpText;
 
     void Start()
     {
@@ -50,14 +60,78 @@ public class TitleScreen : MonoBehaviour
             source.volume = 0f;
             source.Play();
         }
-        StartCoroutine(FadeFrom(1f, 0f, 1.2f));
+        if (!warned) StartCoroutine(WarningThenTitle());
+        else StartCoroutine(FadeFrom(1f, 0f, 1.2f));
     }
+
+    // 심약자 주의 화면 → 키를 누르면 사라지고 타이틀이 밝아짐
+    private IEnumerator WarningThenTitle()
+    {
+        warning = true;
+        warned = true;
+        BuildWarning();
+        SetWarnAlpha(0f);
+        float t = 0f;
+        while (t < 0.8f) { t += Time.deltaTime; SetWarnAlpha(t / 0.8f); yield return null; }
+        SetWarnAlpha(1f);
+        yield return new WaitForSeconds(0.6f);   // 바로 넘기지 않도록 잠깐 기다림
+
+        while (true)
+        {
+            var kb = Keyboard.current;
+            var mouse = Mouse.current;
+            if ((kb != null && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame))
+                || (mouse != null && mouse.leftButton.wasPressedThisFrame)) break;
+            warnHelpText.color = new Color(0.6f, 0.6f, 0.6f, 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 2f)));
+            yield return null;
+        }
+
+        t = 0f;
+        while (t < 0.6f) { t += Time.deltaTime; SetWarnAlpha(1f - t / 0.6f); yield return null; }
+        Destroy(warnRoot);
+        warning = false;
+        yield return FadeFrom(1f, 0f, 1.2f);
+    }
+
+    private void BuildWarning()
+    {
+        warnRoot = new GameObject("WarningCanvas", typeof(Canvas), typeof(CanvasScaler));
+        warnRoot.transform.SetParent(transform, false);
+        var canvas = warnRoot.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 200;   // 타이틀·설정 위
+        var scaler = warnRoot.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.matchWidthOrHeight = 0.5f;
+        var root = warnRoot.transform;
+
+        Stretch(Img(root, "Black", Color.black));
+        warnTitleText = Txt(root, Loc.T(WarnTitle), 72, new Vector2(0.5f, 0.5f), new Vector2(0, 190), new Vector2(1600, 100));
+        warnTitleText.color = new Color(0.8f, 0.2f, 0.18f);
+        warnBodyText = Txt(root, Loc.T(WarnBody), 34, new Vector2(0.5f, 0.5f), new Vector2(0, 10), new Vector2(1700, 260));
+        warnBodyText.color = new Color(0.85f, 0.83f, 0.78f);
+        warnBodyText.lineSpacing = 1.6f;
+        warnHelpText = Txt(root, Loc.T(WarnHelp), 28, new Vector2(0.5f, 0f), new Vector2(0, 110), new Vector2(1000, 40));
+        warnHelpText.color = new Color(0.6f, 0.6f, 0.6f);
+    }
+
+    private void SetWarnAlpha(float a)
+    {
+        if (warnTitleText == null) return;
+        SetA(warnTitleText, a);
+        SetA(warnBodyText, a);
+        SetA(warnHelpText, a);
+    }
+
+    private static void SetA(Text t, float a) { var c = t.color; c.a = a; t.color = c; }
 
     void OnEnable() => Loc.Changed += ApplyLanguage;
     void OnDisable() => Loc.Changed -= ApplyLanguage;
 
     void Update()
     {
+        if (warning) return;   // 주의 화면을 보는 동안에는 배경 소리·메뉴 멈춤
         if (source != null && !starting) source.volume = Mathf.MoveTowards(source.volume, ambienceVolume, 0.3f * Time.deltaTime);
 
         // 제목은 가끔 형광등처럼 깜빡
@@ -118,6 +192,12 @@ public class TitleScreen : MonoBehaviour
 
     private void ApplyLanguage()
     {
+        if (warnTitleText != null)
+        {
+            warnTitleText.text = Loc.T(WarnTitle);
+            warnBodyText.text = Loc.T(WarnBody);
+            warnHelpText.text = Loc.T(WarnHelp);
+        }
         if (titleText == null) return;
         titleText.text = title;
         subtitleText.text = Loc.T(subtitle);

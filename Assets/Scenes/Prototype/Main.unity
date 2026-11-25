@@ -3213,7 +3213,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SoundEmitter
   clip: {fileID: 8300000, guid: f5ac56cf398defb43af667a7ff91b133, type: 3}
-  volume: 0.7
+  volume: 0.4
   hearDistance: 28
   stopFlag: POWER
 --- !u!1 &556160769
@@ -11186,8 +11186,8 @@ MonoBehaviour:
   stayInRoomChance: 0.4
   patrolSpeed: 1.2
   patrolWait: 2
-  seeHideRange: 7
-  calmSeeRange: 3
+  seeHideRange: 6
+  calmSeeRange: 2.5
   exposedMessage: "\uB4E4\uCF30\uB2E4\u2026!"
   liftFrames: []
   liftTime: 1.3

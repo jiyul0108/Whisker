@@ -5,12 +5,13 @@ using UnityEngine;
 //  1) "쿵" 소리 + 화면 번쩍·흔들림 + 지하 불이 깜빡이다 켜짐
 //  2) 카메라가 1층 계단실로 넘어가 2층 철문(전자 잠금)이 열리는 장면을 보여주고 돌아옴
 //  3) 소리가 너무 커서 존재가 지하 계단으로 내려옴 → 지하 전체를 훑고 지나감
-//     그동안 계단은 막히고, 주인과 함께 7번 창고 상자에 숨지 않으면 잡힌다
+//     존재가 내려오는 동안(숨을 시간)만 계단이 막히고, 존재가 지하에 내려온 뒤에는 계단을 다시 쓸 수 있다
+//     주인과 함께 숨지 않으면 잡힌다. 숨어 있으면 존재는 숨은 곳까지만 와서 노려본 뒤 바로 계단으로 올라간다
 public class PowerEvent : MonoBehaviour
 {
     public static PowerEvent Instance { get; private set; }
     public static bool Active { get; private set; }        // 존재가 지하를 훑는 중
-    public static bool BlockStairs { get; private set; }   // 계단 이용 막기
+    public static bool BlockStairs { get; private set; }   // 계단 이용 막기 (존재가 내려오는 동안만)
 
     [Header("연결")]
     [SerializeField] private Stairs doorStairs;        // 열리는 2층 철문 (Stairs_1F_to2F)
@@ -104,6 +105,9 @@ public class PowerEvent : MonoBehaviour
         BlockStairs = true;
         Message(warnMessage, 3.5f);
         yield return new WaitForSeconds(hideTime);
+
+        // 존재가 지하에 내려옴 → 이제 계단은 다시 쓸 수 있음 (내려오는 동안만 막음)
+        BlockStairs = false;
 
         if (presence != null && arrivalStairs != null)
         {

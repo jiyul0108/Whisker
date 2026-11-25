@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -42,6 +43,12 @@ public class OwnerFear : MonoBehaviour
     private float lastScream = -999f;
     private Text label;
     private bool started;   // 고양이가 처음 울어서(E) 주인이 들을 때까지는 공포도가 오르지 않음
+    private bool frozeNoticed;   // 몸이 굳는 효과 안내를 이미 보여줬는가 (판마다 한 번)
+
+    // 처음 몸이 굳을 때 한 번 보여주는 안내 (2차 테스트: "굳으면 무슨 불이익이 있는지 알려 달라")
+    // 노란 메시지는 한 줄만 보이므로 두 문장을 차례로 보여줌
+    private const string FrozeNotice1 = "주인이 겁에 질려 몸이 굳었다 (느려짐)";
+    private const string FrozeNotice2 = "공포도가 가득 차면 비명을 질러 존재를 부른다. 곁에서 울어(E) 진정시키자";
 
     void Awake()
     {
@@ -65,6 +72,14 @@ public class OwnerFear : MonoBehaviour
         var presence = FindAnyObjectByType<PresenceAI>();
         if (presence != null) presence.HearNoise(transform.position);
         GameLog.Info("주인: 비명");
+    }
+
+    private IEnumerator FrozeNoticeRoutine()
+    {
+        if (HintUI.Instance == null) yield break;
+        HintUI.Instance.ShowItemMessage(FrozeNotice1, 2.5f);
+        yield return new WaitForSecondsRealtime(2.5f);
+        if (HintUI.Instance != null) HintUI.Instance.ShowItemMessage(FrozeNotice2, 4f);
     }
 
     // 고양이가 울었을 때 CatMeow가 호출
@@ -92,6 +107,11 @@ public class OwnerFear : MonoBehaviour
         else delta = -calmFall * (dark ? darkCalmFactor : 1f);
         Fear = Mathf.Clamp(Fear + delta * Time.deltaTime, 0f, 100f);
         if (Fear >= 100f && Time.time - lastScream > screamCooldown) Scream();
+        else if (Fear >= 70f && !frozeNoticed)
+        {
+            frozeNoticed = true;
+            StartCoroutine(FrozeNoticeRoutine());
+        }
 
         // 공포도 → 속도 (Slow Start까지는 평소 속도)
         float k = Mathf.InverseLerp(slowStart, 100f, Fear);
@@ -110,6 +130,7 @@ public class OwnerFear : MonoBehaviour
         Vector2 tl = new Vector2(0f, 1f);
         label = UIKit.Label(canvas.transform, "주인 공포도", 26, new Color(0.88f, 0.85f, 0.78f), tl,
                             new Vector2(30f, -24f), new Vector2(400f, 34f), TextAnchor.MiddleLeft);
+        label.horizontalOverflow = HorizontalWrapMode.Overflow;   // "(몸이 굳어 느려진다)"가 붙어도 줄바꿈 없이 한 줄로
         var back = UIKit.Box(canvas.transform, new Color(0.08f, 0.08f, 0.09f, 0.8f), tl, new Vector2(30f, -64f),
                              new Vector2(320f, 24f), "FearBack");
         fill = UIKit.Box(back.transform, Color.white, new Vector2(0f, 0.5f), new Vector2(3f, 0f), new Vector2(314f, 18f), "FearFill");
@@ -129,6 +150,6 @@ public class OwnerFear : MonoBehaviour
         fill.fillAmount = f;
         // 노랑 → 주황 → 빨강
         fill.color = Color.Lerp(new Color(0.85f, 0.75f, 0.3f), new Color(0.8f, 0.1f, 0.08f), f);
-        label.text = Loc.T(Fear >= 70f ? "주인 공포도  (몸이 굳는다…)" : "주인 공포도");
+        label.text = Loc.T(Fear >= 70f ? "주인 공포도  (몸이 굳어 느려진다)" : "주인 공포도");
     }
 }

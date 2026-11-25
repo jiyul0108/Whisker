@@ -79,6 +79,7 @@ public class GameManager : MonoBehaviour
         Sfx.Play(caughtClip, caughtVolume);
         GameLog.Info($"게임오버: {reason} (잡힌 횟수 {deaths})");
         titleText.text = Loc.T(caughtTitle);
+        CenterTitle();
         titleText.color = new Color(0.75f, 0.05f, 0.05f);
         subText.text = (string.IsNullOrEmpty(shown) ? "" : Loc.T(shown) + "\n\n")
                        + Loc.F("플레이 시간  {0}", FormatTime(PlayTime)) + "\n\n" + Loc.T(caughtHint);
@@ -95,6 +96,7 @@ public class GameManager : MonoBehaviour
         float t = PlayTime;
         GameLog.Info($"탈출 성공! 플레이 시간 {t:0}초, 잡힌 횟수 {deaths}");
         titleText.text = Loc.T(clearTitle);
+        CenterTitle();
         titleText.color = new Color(0.85f, 0.8f, 0.6f);
         subText.text = Loc.F("플레이 시간  {0}", FormatTime(t)) + "\n" + Loc.F("잡힌 횟수  {0}", deaths)
                        + "\n\n" + Loc.T(clearHint);
@@ -132,6 +134,21 @@ public class GameManager : MonoBehaviour
         }
 
         Restart();
+    }
+
+    // "잡혔다…"처럼 끝에 말줄임표가 붙으면 글자 덩어리가 왼쪽으로 치우쳐 보임
+    // → 말줄임표를 뺀 글자가 화면 가운데에 오도록 말줄임표 폭의 절반만큼 오른쪽으로 옮김
+    private void CenterTitle()
+    {
+        var rt = titleText.rectTransform;
+        string s = titleText.text;
+        string body = s.TrimEnd('…', '.', ' ');
+        if (body.Length == 0 || body.Length == s.Length) { rt.anchoredPosition = new Vector2(0f, 80f); return; }
+        var gen = titleText.cachedTextGeneratorForLayout;
+        var set = titleText.GetGenerationSettings(Vector2.zero);
+        float full = gen.GetPreferredWidth(s, set) / titleText.pixelsPerUnit;
+        float core = gen.GetPreferredWidth(body, set) / titleText.pixelsPerUnit;
+        rt.anchoredPosition = new Vector2((full - core) * 0.5f, 80f);
     }
 
     private static string FormatTime(float t) => $"{(int)t / 60:00}:{(int)t % 60:00}";

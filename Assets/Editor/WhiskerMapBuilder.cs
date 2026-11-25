@@ -202,7 +202,7 @@ public static class WhiskerMapBuilder
         SetProps(buzz, so =>
         {
             so.FindProperty("clip").objectReferenceValue = LoadClip("sfx_electric_buzz");
-            so.FindProperty("volume").floatValue = 0.7f;
+            so.FindProperty("volume").floatValue = 0.4f;        // 2차 테스트: "지지직 소리가 조금 크다" → 0.7에서 줄임
             so.FindProperty("hearDistance").floatValue = 28f;   // 계단(55)에서도 희미하게 들림
             so.FindProperty("stopFlag").stringValue = "POWER";
         });

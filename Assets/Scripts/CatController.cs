@@ -16,6 +16,7 @@ public class CatController : MonoBehaviour
     [SerializeField] private LayerMask groundLayer;
 
     private Rigidbody2D rb;
+    private Collider2D col;
     private SpriteRenderer sr;
     private float moveInput;
     private bool jumpPressed;
@@ -30,6 +31,7 @@ public class CatController : MonoBehaviour
     void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
+        col = GetComponent<Collider2D>();
         sr = GetComponentInChildren<SpriteRenderer>(); // 자식 Visual의 그림
     }
 
@@ -54,7 +56,7 @@ public class CatController : MonoBehaviour
 
     void FixedUpdate()
     {
-        isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+        isGrounded = CheckGround();
         if (ClimbSpot.IsClimbing) return;   // 벽을 타는 동안은 ClimbSpot이 움직임
 
         rb.linearVelocity = new Vector2(moveInput * moveSpeed, rb.linearVelocity.y);
@@ -64,6 +66,20 @@ public class CatController : MonoBehaviour
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
         }
         jumpPressed = false;
+    }
+
+    // 바닥 확인: 발 가운데 원 + 발바닥 너비 전체
+    // (의자 끝에 몸 절반만 걸쳐 서 있으면 가운데 원은 허공이라 공중으로 판단 → 착지 그림에서 멈추던 문제)
+    private bool CheckGround()
+    {
+        if (Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer)) return true;
+        if (col == null || rb.linearVelocity.y > 0.1f) return false;   // 뛰어오르는 중에는 아님
+        Bounds b = col.bounds;
+        Vector2 center = new Vector2(b.center.x, b.min.y - 0.04f);
+        Vector2 size = new Vector2(b.size.x * 0.85f, 0.08f);
+        foreach (var hit in Physics2D.OverlapBoxAll(center, size, 0f, groundLayer))
+            if (hit != null && hit != col && !hit.isTrigger) return true;
+        return false;
     }
 
     void OnDrawGizmosSelected()
